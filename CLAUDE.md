@@ -94,8 +94,65 @@ that really is the single gate, and there is no second flag to discover later.
 
 It also confirms the fix has to happen at boot: `setprop` on a `ro.` property is
 refused at runtime (`Failed to set property`), which is why this needs
-`resetprop` from Magisk rather than anything simpler. Confirmed still empty and
-still blocking *after* the unlock — unlocking does not relax it.
+`resetprop` from Magisk rather than anything simpler. Unlocking does not relax
+the check.
+
+### `getprop` CANNOT see this property. Never validate with it.
+
+**This is the single most expensive thing in the project to have learned.** It
+cost roughly eight flash-and-reboot cycles chasing a bug that did not exist.
+
+`ro.vendor.tct.endurance` resolves to the `vendor_default_prop` SELinux context,
+and `adb shell` cannot open that context's property area. Both lookup paths then
+lie to you, in the same direction:
+
+- `getprop | grep endurance` — `__system_property_foreach` **silently skips any
+  context the caller cannot open**, so the property is simply absent from the list.
+- `getprop ro.vendor.tct.endurance` — `__system_property_find` resolves the name
+  to that same unopenable area and returns nothing.
+
+So the property reads empty from adb **whether or not it is set**. It was in fact
+being set correctly for many attempts before that was understood.
+
+Do not be reassured by other `ro.vendor.*` properties being readable — 52 of them
+are, but they live in `vendor_mtk_default_prop` and `exported_default_prop`,
+which are different contexts. Check with `getprop -Z <name>` before drawing any
+conclusion from a readable neighbour.
+
+**The only honest test is to install an APK.** And wait for
+`sys.boot_completed=1` first, or you get `cmd: Can't find service: package`,
+which is system_server not being up yet and nothing to do with the block.
+
+### The recipe that works
+
+`tools/inject-endurance.sh` injects this into the ramdisk's `overlay.d`. It is
+neutronscott/flip2's `create-boot` recipe verbatim, which is why it is trusted:
+
+```
+on post-fs-data
+    exec u:r:magisk:s0 root root -- ${MAGISKTMP}/magisk resetprop -n ro.vendor.tct.endurance true
+```
+
+`${MAGISKTMP}` is substituted by magiskinit before init parses the file, so the
+`$` never reaches init's expander. flip2's wiki records this property as racy
+even on this recipe — "sometimes you cannot install APKs later, just reboot" —
+so one bad boot is not evidence the approach is wrong.
+
+### init .rc rules on this device, all learned the hard way
+
+Every one of these fails **silently**, which is what made them expensive:
+
+| Rule | What happens if you break it |
+|---|---|
+| **No `$` anywhere** | init drops the whole command at parse time. `echo rc=$?` made every command containing it vanish, looking exactly like it ran and failed |
+| **Always give `<seclabel> <user> <group>`** | bare `exec -- cmd` is dropped outright — no marker file, no property, nothing |
+| **`setprop` from a child process is denied** | markers set by `exec ... sh -c "... setprop ..."` never appear. `resetprop -n` works fine from a child; use it to report |
+| **No nested quotes** | `sh -c "... 'inner' ..."` never runs. Plain `sh -c "..."` with a space *is* fine |
+
+And Magisk's own failures are silent **by construction**: its vendored bionic
+`#define`s `async_safe_format_log` to a no-op, `SysProp::add()` discards the
+return value of `__system_property_add2`, and resetprop's set mode always exits
+0. There is no error to find, so do not go looking for one — instrument instead.
 
 The community answer is to flash `neutron.img` from `neutronscott/flip2`.
 **We are not doing that**, on evidence from their own tracker:

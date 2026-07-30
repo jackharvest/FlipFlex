@@ -2,31 +2,29 @@
 
 **Live runbook. Update the status line after every step.**
 
-> **STATUS: UNLOCKED. `unlocked: yes`, `secure: no`. Factory reset has happened.**
-> The phone is in setup wizard, no SIM, and must not touch a network until FOTA
-> is disabled again.
+> **STATUS: PHASE 0 IS DONE. `adb install` returns `Success`.**
+> Bootloader unlocked, own boot dumped and Magisk-patched, `endurance` set at
+> boot, APKs install, Magisk app installed. FOTA disabled. 240×320 @ 160 intact.
 >
-> **Resume here:**
-> 1. Through the wizard offline — skip Wi-Fi, skip the account, no screen lock.
-> 2. Re-enable ADB: dial `*#*#33284#*#*`, accept the RSA prompt.
-> 3. **`adb shell pm disable-user com.tcl.fota.system`** — closes the OTA race.
-> 4. Then step 5, the dump — but `fastboot boot` does not work on this LK (see
->    below), so `recovery2.img` has to be *flashed* to `recovery` to be used.
->    That is a write to a partition we have no backup of. It is the least-bad
->    partition to lose and the only lever left; decide it explicitly.
+> **Only remaining step for full root:** open the Magisk app **on the handset**
+> once so it completes its setup, then `su` can be granted to adb. Installs
+> already work without it, so nothing is blocked on this.
 >
-> The plan to go straight from unlock to recovery without booting Android did not
-> survive `fastboot boot` failing — the failed handoff booted Android and took
-> the factory reset with it.
->
-> **The pre-unlock backup is now definitively impossible** -- see below. The
-> next action is the destructive one, and it needs Mike's word:
->
-> 1. `fastboot flashing unlock` (**WIPES /data**)
-> 2. `fastboot boot backups/recovery2.img`
-> 3. `tools/dump-from-recovery.sh`
-> 4. **Re-disable FOTA before the phone ever reaches a network** -- see
->    "The factory reset costs us more than /data".
+> **Never validate `endurance` with `getprop` — it cannot see it.** Install an
+> APK instead, after `sys.boot_completed=1`. See CLAUDE.md; this cost about
+> eight flash cycles.
+
+## Where things stand
+
+| | |
+|---|---|
+| Bootloader | `unlocked: yes`, `secure: no` |
+| `boot` | our own UPCI boot, Magisk 30.7 + endurance `.rc` |
+| `recovery` | **neutronscott's `recovery2.img`** — stock recovery is gone, knowingly |
+| Backup | 41 partitions, `backups/20260730-0654-UPCI-recovery/` |
+| Stock boot | `boot.img`, sha256 `014d72a4…` — the only way back |
+| FOTA | `disabled-user`. **Phone still must not take an OTA** |
+| ADB | re-enabled post-reset via `*#*#33284#*#*` |
 
 ## `fastboot boot` does not work on this LK. Do not rely on it.
 
@@ -182,20 +180,29 @@ be installed. This is a binary go/no-go.
       supported (`dacode=0x6739`, `loader="mt6739_payload.bin"`).
 - [x] **4. BROM backup** — **impossible on this unit, abandoned.** BROM never
       enumerates and the preloader will not talk to mtkclient. Superseded by
-      step 5, which is why 7 now comes before it.
-- [ ] **7. `fastboot flashing unlock`** — destructive, factory-resets
-      ← **YOU ARE HERE**
-- [ ] **5. Dump our own stock boot.img** — `fastboot boot backups/recovery2.img`
-      then `tools/dump-from-recovery.sh`. First thing after the unlock.
-- [x] **6a. Magisk kit staged** — `tools/setup-magisk.sh`, v30.7 pinned by
-      sha256, armeabi-v7a extracted and asserted 32-bit ARM. Done before the
-      unlock deliberately: it needs no phone, and it found the ABI bootloop
-      below while that was still free to find.
-- [ ] **6. Patch it on the phone** — `tools/patch-boot.sh`, inside
-      `recovery2.img`. **Not in an emulator** — see CLAUDE.md.
-- [ ] **8. Flash the patched boot**
-- [ ] **9. Set `ro.vendor.tct.endurance`, verify APK install**
-- [ ] **10. Gate test** — see below
+      step 5.
+- [x] **7. `fastboot flashing unlock`** — done. LK prompts on the handset,
+      volume-up confirms. `unlocked: yes`, `secure: no`.
+- [x] **5. Dump our own stock boot.img** — needed `recovery2.img` *flashed* to
+      `recovery`, because `fastboot boot` does not work on this LK. 41
+      partitions in `backups/20260730-0654-UPCI-recovery/`.
+- [x] **6. Patch it with Magisk** — on the phone, in recovery, never an
+      emulator. `tools/setup-magisk.sh` then `tools/patch-boot.sh`.
+- [x] **8. Flash the patched boot** — `tools/flash-boot-from-recovery.sh`,
+      with a read-back check that caught a genuinely corrupt write.
+- [x] **9. Set `ro.vendor.tct.endurance`, verify APK install** —
+      `tools/inject-endurance.sh`. **`adb install` → `Success`.**
+- [ ] **10. Gate test** — 3 of 5 passed, see below.
+
+## Step 10 — the gate
+
+| # | Test | Result |
+|---|---|---|
+| 1 | `endurance` reads true | **untestable by design** — `getprop` cannot see `vendor_default_prop`. Superseded by test 2 |
+| 2 | `adb install` succeeds | **PASS** — `Success`, and no `forbidden installation` in logcat |
+| 3 | App launches / appears in drawer | not yet — needs a real APK of ours |
+| 4 | Every key gives a distinct keycode | mapping known (`docs/keymap.md`); `onKeyDown` pass still outstanding |
+| 5 | `wm size` / `wm density` after reset | **PASS** — 240x320, density 160 |
 
 ## Step 4 — BROM mode and the backup
 

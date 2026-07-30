@@ -31,8 +31,20 @@ magic=$(dd if="$IMG" bs=8 count=1 2>/dev/null)
 [ "$magic" = "ANDROID!" ] || { echo "$IMG is not a boot image (magic '$magic')" >&2; exit 1; }
 
 sz=$(stat -f%z "$IMG")
-if [ "$sz" -gt "$EXPECT" ]; then
-	echo "$IMG is $sz bytes, larger than the $EXPECT-byte $PART partition" >&2
+# EXACT, not just "fits". A truncated image passes a <= check, writes cleanly
+# over the head of the partition, and leaves the previous image's tail behind --
+# which boots into something that is neither image. This happened: an adb
+# exec-out pull was killed by a timeout, leaving a 5,586,941-byte file that was
+# written twice before the read-back explained it. The read-back caught it, but
+# the write should never have been attempted.
+#
+# It also has to be exact for the verification below to mean anything: that
+# hashes the whole partition, so a legitimately-smaller image would always
+# "mismatch". If a short boot image is ever needed, the read-back needs a
+# count= and this check needs rethinking -- do not just loosen it.
+if [ "$sz" != "$EXPECT" ]; then
+	echo "$IMG is $sz bytes; the $PART partition is exactly $EXPECT." >&2
+	[ "$sz" -lt "$EXPECT" ] && echo "Short by $((EXPECT - sz)) bytes -- almost certainly a truncated pull." >&2
 	exit 1
 fi
 
