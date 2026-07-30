@@ -1,0 +1,19 @@
+# The mtkclient clone is a third-party git repo with its own history. It is
+# reproduced by tools/setup-mtkclient.sh, and our two changes to it live in
+# vendor/mtkclient-macos-fuse.patch -- which IS tracked.
+vendor/mtkclient/
+
+# Device images. A full flash.bin is ~16 GB; even the critical set is tens of
+# MB of binary that git would store badly and that must never leave the machine
+# by accident -- some of these partitions carry IMEI and calibration data.
+backups/
+
+# Android / Gradle
+.gradle/
+build/
+local.properties
+*.apk
+*.aab
+*.keystore
+
+.DS_Store
