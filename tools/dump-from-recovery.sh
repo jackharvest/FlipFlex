@@ -24,10 +24,15 @@ mkdir -p "$OUT"
 # Everything needed to put the phone back exactly as it was, plus the identity
 # partitions that are irreplaceable if lost (nvram/nvdata/proinfo carry IMEI
 # and RF calibration -- no download anywhere can regenerate these for YOUR unit).
+# Every name here was confirmed present in /dev/block/by-name on the live 4058G
+# before the unlock, so a "failed" line below means a read problem, not a typo.
+# frp/oembin/swversion/md_udc were added after that listing -- small, and there
+# is exactly one chance to capture them.
 CORE="boot vendor_boot dtbo vbmeta vbmeta_system vbmeta_vendor lk lk2 \
-recovery logo para boot_para seccfg md1img md1dsp nvram nvdata nvcfg \
-proinfo protect1 protect2 persist oempersist efuse expdb flashinfo \
-loader_ext1 loader_ext2 mcupmfw spmfw gz1 gz2 tee1 tee2 sec1 otp"
+recovery logo para boot_para seccfg md1img md1dsp md_udc nvram nvdata nvcfg \
+proinfo protect1 protect2 persist oempersist efuse expdb flashinfo frp \
+loader_ext1 loader_ext2 mcupmfw spmfw gz1 gz2 tee1 tee2 sec1 otp oembin \
+swversion"
 
 [ "${1:-}" = "all" ] && CORE="$CORE super"
 

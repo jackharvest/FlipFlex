@@ -88,9 +88,39 @@ does, get plain Magisk root first and set the property separately —
 `/data/adb/post-fs-data.d/`. Two independently debuggable steps instead of one
 compound failure.
 
-**`magiskboot` has no macOS build** — it ships only as Android ELF. Patch the
-dumped boot by loading it into an Android emulator and using the Magisk app's
-"Select and Patch a File", which needs no root, then `adb pull` the result.
+**`magiskboot` has no macOS build** — it ships only as Android ELF, so the patch
+has to run on an ARM Android system somewhere. **Run it on the phone, in
+`recovery2.img` — not in an emulator.** `tools/setup-magisk.sh` extracts the kit,
+`tools/patch-boot.sh` drives it.
+
+The emulator route was the original plan and it would have bootlooped the phone.
+`boot_patch.sh` does `magiskboot cpio ramdisk.cpio "add 0750 init magiskinit"` —
+it injects whichever `magiskinit` sits **in its own directory** and makes it
+`/init`. In the Magisk app's flow that directory is the app's native library
+dir, so the injected binary is the ABI of *whatever machine did the patching*.
+This phone is `ro.product.cpu.abi=armeabi-v7a` with no `abilist64`, so patching
+on an arm64 emulator writes an **arm64 `/init` for a CPU that cannot execute
+64-bit code** — an unrunnable ELF as PID 1, and a bootloop whose cause is
+invisible in the image. Patching inside recovery on the phone makes the ABI
+correct by construction. (Apple Silicon also cannot execute AArch32 at all, so
+an `armeabi-v7a` emulator would be full software emulation.)
+
+`patch-boot.sh` re-extracts the injected `/init` afterwards and asserts it is
+32-bit ARM. Do not remove that check — it is the difference between finding this
+class of mistake in a second and finding it in a bootloop.
+
+**The Magisk flags are measured, not guessed.** `boot_patch.sh` honours
+pre-set env vars, and `patch-boot.sh` passes all five explicitly because
+`get_flags()` derives them from mounts that look different inside recovery. The
+values came off the live stock device before the unlock:
+
+| Flag | Value | Because |
+|---|---|---|
+| `KEEPVERITY` | `true` | `/` is `/dev/block/dm-3`, not `rootfs` → system-as-root |
+| `KEEPFORCEENCRYPT` | `true` | `/data` on `dm-6`, `ro.crypto.state=encrypted` |
+| `PATCHVBMETAFLAG` | `false` | a real `vbmeta` exists (`mmcblk0p36`) |
+| `LEGACYSAR` | `false` | no `skip_initramfs` in `/proc/cmdline` |
+| `PREINITDEVICE` | `persist` | exists (`mmcblk0p4`), survives factory reset |
 
 **mtkclient cannot attach to this phone, and that is settled.** BROM
 (`0e8d:0003`) never appears on the bus no matter which keys are held; only the

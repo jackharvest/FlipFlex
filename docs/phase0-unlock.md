@@ -49,6 +49,29 @@ merely inconvenient:
 So the unlock genuinely must come first, and step 4's BROM backup is not
 merely deferred, it is unreachable on this unit. The recovery dump replaces it.
 
+## Measured off the live stock device, pre-unlock
+
+Everything `boot_patch.sh` needs, read while the phone was still booted and
+stock. Recorded here because after the reset some of it is harder to get, and
+because `get_flags()` would re-derive it wrongly inside recovery.
+
+```
+ro.product.cpu.abi          armeabi-v7a      <- decides which magiskinit to inject
+ro.build.version.sdk        30
+ro.crypto.state             encrypted        -> KEEPFORCEENCRYPT=true
+ro.boot.dynamic_partitions  true
+ro.boot.vbmeta.device_state locked
+ro.vendor.tct.endurance     (empty)          <- still the blocker
+/                           /dev/block/dm-3 ext4 ro   -> SYSTEM_AS_ROOT -> KEEPVERITY=true
+/data                       /dev/block/dm-6 f2fs      -> encrypted
+/proc/cmdline               no skip_initramfs         -> LEGACYSAR=false
+by-name/vbmeta              mmcblk0p36                -> PATCHVBMETAFLAG=false
+by-name/persist             mmcblk0p4                 -> PREINITDEVICE=persist
+```
+
+48 partitions exist by name. All 34 the dump script wanted are present, so a
+`failed` line from `dump-from-recovery.sh` means a read error, not a bad name.
+
 ## The factory reset costs us more than /data
 
 `flashing unlock` factory-resets, and package enable/disable state lives in
@@ -130,7 +153,12 @@ be installed. This is a binary go/no-go.
       ← **YOU ARE HERE**
 - [ ] **5. Dump our own stock boot.img** — `fastboot boot backups/recovery2.img`
       then `tools/dump-from-recovery.sh`. First thing after the unlock.
-- [ ] **6. Patch it with Magisk (via emulator)**
+- [x] **6a. Magisk kit staged** — `tools/setup-magisk.sh`, v30.7 pinned by
+      sha256, armeabi-v7a extracted and asserted 32-bit ARM. Done before the
+      unlock deliberately: it needs no phone, and it found the ABI bootloop
+      below while that was still free to find.
+- [ ] **6. Patch it on the phone** — `tools/patch-boot.sh`, inside
+      `recovery2.img`. **Not in an emulator** — see CLAUDE.md.
 - [ ] **8. Flash the patched boot**
 - [ ] **9. Set `ro.vendor.tct.endurance`, verify APK install**
 - [ ] **10. Gate test** — see below

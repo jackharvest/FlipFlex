@@ -17,3 +17,7 @@ local.properties
 *.keystore
 
 .DS_Store
+
+# The Magisk patching kit, extracted from the APK by tools/setup-magisk.sh.
+# Binary, and reproducible from a pinned checksum, so it is not worth tracking.
+vendor/magisk-armeabi-v7a/
