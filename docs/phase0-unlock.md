@@ -2,11 +2,22 @@
 
 **Live runbook. Update the status line after every step.**
 
-> **STATUS: step 4 blocked, step 7 is the decision point.**
-> Fastboot is reachable and repeatable via `tools/bootseq.py`. mtkclient cannot
-> talk to this preloader, so there is **no read path before unlocking** and the
-> backup we wanted first is not obtainable. Nothing has been written to the
-> device. Awaiting a call on whether to unlock without one.
+> **STATUS: paused at step 7, awaiting a go/no-go on the unlock.**
+> Nothing has ever been written to this device. Fastboot is reachable and
+> repeatable. mtkclient is ruled out, so the backup cannot precede the unlock;
+> `recovery2.img` is downloaded and verified and is the read path immediately
+> after it.
+>
+> **Resume here:**
+> 1. Battery pull, reinsert (LK's command channel is wedged from the junk-image
+>    probe -- `fastboot devices` lists it but `getvar` hangs).
+> 2. `tools/bootseq.py FASTBOOT`, then phone OFF / battery IN / plug in / no buttons.
+> 3. `fastboot getvar unlocked` to confirm the channel is healthy again.
+> 4. Then, on Mike's word: `fastboot flashing unlock` (**WIPES**), then
+>    `fastboot boot backups/recovery2.img`, then `tools/dump-from-recovery.sh`.
+>
+> Open question, still unanswered: does this LK implement `fastboot boot`? Test
+> it with `recovery2.img`, never with a junk file.
 
 ## How to get into fastboot (works, two for two, attempt 0 each time)
 
