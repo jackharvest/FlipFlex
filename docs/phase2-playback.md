@@ -181,13 +181,62 @@ handset because the jack and Bluetooth are the two good ways to listen to it.
 `ACCDET` (`event0`) exposes a real `SW_HEADPHONE_INSERT` if jack state is ever
 needed beyond the standard broadcast.
 
+## The player is landscape and immersive
+
+`PlayerActivity` is pinned to `screenOrientation="landscape"`. Rotated, the panel
+is 320×240, so a 16:9 video is **320×180 instead of 240×135 — 1.8× the picture
+area**. The rotation is honoured by WindowManager and needs no sensor;
+`mCurrentRotation=ROTATION_90` on the real device.
+
+Nothing else is permanently on screen. The status bar, shell header and shell
+softkey bar together are **72 of 240 rows, thirty percent of the panel**, so all
+three are hidden and the controls are drawn over the video, fading after 3.5 s
+and returning on any key. They stay up while paused, because a frozen frame with
+no controls is indistinguishable from a crash — and that is exactly what the user
+sees every time they reopen the lid.
+
+**The D-pad rotates with the handset**, so `UP` and `LEFT` both seek back and
+`DOWN` and `RIGHT` both seek forward. Whichever way the phone is held, the key
+pointing at the start of the film seeks towards it. Nothing is lost; up and down
+have no other job on that screen.
+
+## A stale session blocks the *item*, not the client
+
+Playback intermittently failed preflight with a bare `HTTP 400`. It was not
+load, not `X-Plex-Platform`, and not the resolution. Measured against 1.43.2:
+
+| Request | Result |
+|---|---|
+| Our client, item with a stale session | **400** |
+| **A different client identifier**, same item | **400** |
+| Our client, a different item | **200** |
+| The same item after a `state=stopped` timeline | **200** |
+
+So **Plex refuses a new transcode for any item it believes still has a live
+session, and the refusal is item-scoped**. Stopping the transcode is not enough;
+only the `stopped` timeline clears it.
+
+`onDestroy` sends that on the clean path but does not run when the process is
+killed — a crash, a force-stop, or `adb install -r` over a running build. So the
+ratingKey, position and duration are mirrored into prefs on every timeline
+report, and the next `startPlayback` closes out whatever was left open. **The
+position is stored rather than zeroed**: `stopped` with `time=0` would wipe the
+resume point and turn a crash into lost progress.
+
+Also note the timeline call **requires `X-Plex-Client-Identifier`**. Without it
+the server answers 400 and the session is not cleared. The app sends it as a
+header; a hand-rolled `curl` reproduction will not unless you add it.
+
 ## Still open
 
+- [ ] **Downloads and offline playback** — the big one, and its own phase. Needs
+      a foreground service, storage management, an offline metadata cache and a
+      local-file path through the player. PocketFlex's `dlworker.sh` is the
+      model: `protocol=http` against `start.mkv` gives one continuous file.
 - [ ] Direct play for files the MT6739 can decode, skipping the transcoder
 - [ ] Subtitles — ExoPlayer can render a soft track, so no burn-in needed
 - [ ] Audio track selection (dub vs original)
-- [ ] Search, and A–Z jump on long libraries
-- [ ] Paging past the first 60 items of a library
+- [ ] Search
 - [ ] Music, and the Now Playing screen from the art
 - [ ] Autoplay next episode
-- [ ] A real Settings screen — sign-out is currently the only entry
+- [ ] Quality/bitrate settings, and Wi-Fi-only guards
