@@ -8,6 +8,13 @@ Read `docs/phase0-unlock.md` first — it is the live runbook and says exactly
 where we are. This file is the things that cost time to discover.
 `docs/keymap.md` has the keypad, read off the stock `.kl` files.
 
+The unlock work is also published, scrubbed of anything unit-specific, at
+**https://github.com/jackharvest/tcl-flip-macos-unlock** — tools plus a
+`docs/traps.md` of the silent failures. If you fix a bug in a `tools/` script
+that exists in both, fix it there too. **Never push `backups/` anywhere**:
+`proinfo` carries the IMEI and `nvram`/`nvdata`/`persist` carry per-unit RF
+calibration.
+
 ## The device, as measured (not as advertised)
 
 Everything here came off the real unit via `tools/recon.sh`, not a spec sheet.

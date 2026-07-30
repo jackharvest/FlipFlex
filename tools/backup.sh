@@ -43,8 +43,12 @@ critical)
 	"$MTK" r "$names" "$files"
 	;;
 full)
-	echo "==> FULL eMMC -> $OUT/flash.bin  (this is the one worth sharing)"
+	echo "==> FULL eMMC -> $OUT/flash.bin"
 	echo "    16 GB over USB 2.0. Expect 1-2 hours. Do not unplug."
+	echo "    THIS FILE CONTAINS YOUR IMEI AND RF CALIBRATION. Keep it, restore"
+	echo "    from it, but do NOT publish it: proinfo/nvram/nvdata/persist are"
+	echo "    unique to this handset, and flashing them onto another one clones"
+	echo "    your identity onto it."
 	"$MTK" rf "$OUT/flash.bin"
 	;;
 *)
@@ -57,5 +61,5 @@ echo
 echo "==> done. contents of $OUT:"
 ls -lh "$OUT"
 echo
-echo "Checksums (keep these with the files if you share them):"
+echo "Checksums (for verifying your own restores):"
 find "$OUT" -type f -exec shasum -a 256 {} \; | tee "$OUT/SHA256SUMS"
