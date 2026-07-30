@@ -1,26 +1,27 @@
 package io.github.jackharvest.flipflex.ui
 
-import android.content.Intent
 import android.os.Bundle
 import androidx.lifecycle.lifecycleScope
 import io.github.jackharvest.flipflex.R
 import io.github.jackharvest.flipflex.input.Action
 import io.github.jackharvest.flipflex.plex.PlexItem
 import io.github.jackharvest.flipflex.plex.PlexLibrary
-import io.github.jackharvest.flipflex.plex.PlexServers
 import kotlinx.coroutines.launch
 
 /**
  * The start screen, and what the Home softkey returns to.
  *
  * Continue Watching sits at the top and is not a submenu: on a phone that gets
- * opened for four minutes at a time, the shortest path from lid-open to
- * playing the thing you were already watching is the feature. Everything below
- * it is browsing, which is the rarer case.
+ * opened for four minutes at a time, the shortest path from lid-open to playing
+ * the thing you were already watching is the feature. Everything below it is
+ * browsing, which is the rarer case.
  */
 class HomeActivity : FlipActivity() {
 
     private lateinit var list: RowList
+
+    /** Every section on the server, including hidden ones, for the options menu. */
+    private var allSections: List<PlexItem> = emptyList()
 
     /** What a home row does when chosen. */
     private sealed interface Dest {
@@ -55,11 +56,6 @@ class HomeActivity : FlipActivity() {
         showMessage(null)
         setBusy(true)
         lifecycleScope.launch {
-            // Both fetches are needed before the menu can be drawn, because the
-            // Continue Watching row shows its own count and the libraries are
-            // one row each. Sequential rather than parallel: this SoC on a
-            // 1 Mbps uplink gains nothing from two in-flight requests, and the
-            // sequential version is the one whose failure is easy to read.
             val deck = PlexLibrary.onDeck(uri, token)
             val sections = PlexLibrary.sections(uri, token)
             setBusy(false)
@@ -69,82 +65,97 @@ class HomeActivity : FlipActivity() {
                 return@launch
             }
 
-            val rows = buildList {
-                if (deck.isNotEmpty()) {
-                    add(
-                        RowList.Row(
-                            title = getString(R.string.home_continue),
-                            trailing = deck.size.toString(),
-                            payload = Dest.OnDeck,
-                        )
-                    )
-                }
-                sections.forEach { s ->
-                    add(
-                        RowList.Row(
-                            title = s.title,
-                            subtitle = if (s.type == "show") "TV Shows" else "Movies",
-                            payload = Dest.Section(s),
-                        )
-                    )
-                }
-                add(RowList.Row(title = getString(R.string.home_recent), payload = Dest.Recent))
-                add(RowList.Row(title = getString(R.string.home_settings), payload = Dest.Settings))
-            }
-            list.submit(rows)
+            allSections = sections
+            render(deck, sections)
         }
+    }
+
+    private fun render(deck: List<PlexItem>, sections: List<PlexItem>) {
+        val hidden = store.hiddenSections
+        val rows = buildList {
+            if (deck.isNotEmpty()) {
+                add(
+                    RowList.Row(
+                        title = getString(R.string.home_continue),
+                        trailing = deck.size.toString(),
+                        payload = Dest.OnDeck,
+                    )
+                )
+            }
+            // Hidden libraries are dropped here rather than being greyed out.
+            // The whole point of hiding the 4K library on a 240x320 screen is to
+            // stop it taking a row, so leaving a disabled row would defeat it.
+            sections.filter { it.sectionKey !in hidden }.forEach { s ->
+                add(
+                    RowList.Row(
+                        title = s.title,
+                        subtitle = if (s.type == "show") "TV Shows" else "Movies",
+                        payload = Dest.Section(s),
+                    )
+                )
+            }
+            add(RowList.Row(title = getString(R.string.home_recent), payload = Dest.Recent))
+            add(RowList.Row(title = getString(R.string.home_settings), payload = Dest.Settings))
+        }
+        list.submit(rows, keepSelection = true)
     }
 
     private fun open(dest: Dest) {
         when (dest) {
             Dest.OnDeck -> startActivity(
-                BrowseActivity.intent(this, BrowseActivity.MODE_ONDECK, "", getString(R.string.home_continue))
+                BrowseActivity.intent(
+                    this, BrowseActivity.MODE_ONDECK, "", getString(R.string.home_continue),
+                )
             )
             Dest.Recent -> startActivity(
-                BrowseActivity.intent(this, BrowseActivity.MODE_RECENT, "", getString(R.string.home_recent))
+                BrowseActivity.intent(
+                    this, BrowseActivity.MODE_RECENT, "", getString(R.string.home_recent),
+                )
             )
+            // A library opens on its Recommended view. The A-Z is one press away
+            // from there, via Options.
             is Dest.Section -> startActivity(
-                BrowseActivity.intent(this, BrowseActivity.MODE_SECTION, dest.item.sectionKey, dest.item.title)
+                BrowseActivity.intent(
+                    this, BrowseActivity.MODE_RECOMMENDED, dest.item.sectionKey, dest.item.title,
+                    sectionType = dest.item.type,
+                )
             )
-            Dest.Settings -> {
-                // No settings screen yet. Sign-out is the one setting the proof
-                // of concept genuinely needs, because re-linking is the only way
-                // to recover from a wrong account or a stale token.
-                store.signOut()
-                startActivity(Intent(this, LinkActivity::class.java))
-                finish()
-            }
+            Dest.Settings -> startActivity(SettingsActivity.intent(this))
         }
     }
 
-    override fun optionsHeading(): String = store.serverName ?: getString(R.string.app_name)
+    override fun optionsHeading(): String = list.selectedRow()?.title.orEmpty()
 
-    override fun optionsFor(): List<Option> = listOf(
-        Option("Refresh") { load() },
-        Option("Change server") {
-            lifecycleScope.launch {
-                setBusy(true)
-                // Force a fresh pick by clearing the pinned server id, so the
-                // ranking runs over every server on the account rather than
-                // re-choosing the one we already had.
-                store.serverClientId = null
-                val token = store.token
-                val chosen = token?.let { PlexServers.pick(it) }
-                setBusy(false)
-                if (chosen != null) {
-                    store.serverUri = chosen.uri
-                    store.serverToken = chosen.token
-                    store.serverName = chosen.name
-                    store.serverClientId = chosen.serverId
-                    setHeader(chosen.name, showChevron = false)
+    override fun optionsFor(): List<Option> = buildList {
+        val dest = list.selectedRow()?.payload
+
+        // Hiding is offered on the library that is focused, which is what makes
+        // it discoverable -- a "manage libraries" screen buried in Settings is
+        // not where anyone looks when a library is annoying them right now.
+        if (dest is Dest.Section) {
+            add(
+                Option("Hide ${dest.item.title}") {
+                    store.toggleSectionHidden(dest.item.sectionKey)
                     load()
-                } else {
-                    showMessage(getString(R.string.msg_no_server))
                 }
-            }
-        },
-        Option("Sign out") { open(Dest.Settings) },
-    )
+            )
+        }
+        if (store.hiddenSections.isNotEmpty()) {
+            add(Option("Show hidden libraries") {
+                store.hiddenSections = emptySet()
+                load()
+            })
+        }
+
+        add(Option("Settings") { startActivity(SettingsActivity.intent(this@HomeActivity)) })
+        add(Option("Switch profile") {
+            startActivity(SettingsActivity.intent(this@HomeActivity, SettingsActivity.MODE_PROFILE))
+        })
+        add(Option("Change server") {
+            startActivity(SettingsActivity.intent(this@HomeActivity, SettingsActivity.MODE_SERVER))
+        })
+        add(Option("Refresh") { load() })
+    }
 
     override fun onAction(action: Action, keyCode: Int): Boolean = when (action) {
         Action.UP -> list.move(-1)
@@ -158,9 +169,10 @@ class HomeActivity : FlipActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Coming back from an episode should show the updated resume position
-        // in Continue Watching. Reloading on every resume is affordable because
-        // the home fetch is two small requests.
+        // Coming back from an episode should show the updated resume position in
+        // Continue Watching, and coming back from Settings should reflect a
+        // changed server, profile or hidden set.
+        setHeader(store.serverName ?: getString(R.string.app_name), showChevron = false)
         if (list.rows.isNotEmpty()) load()
     }
 

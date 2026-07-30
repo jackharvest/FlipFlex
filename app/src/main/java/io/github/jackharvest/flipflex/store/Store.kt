@@ -29,9 +29,49 @@ class Store(context: Context) {
             prefs.edit().putString(K_CLIENT_ID, it).apply()
         }
 
+    /**
+     * The token in use right now. May belong to a Plex Home profile rather than
+     * to the account that linked the device.
+     */
     var token: String?
         get() = prefs.getString(K_TOKEN, null)?.ifEmpty { null }
         set(v) = prefs.edit().putString(K_TOKEN, v ?: "").apply()
+
+    /**
+     * The token from the original plex.tv/link, kept separately.
+     *
+     * Switching profiles replaces [token], and the profile token cannot be
+     * relied on to switch *again* -- a managed user's token is not guaranteed to
+     * be allowed to enumerate or assume other profiles. Keeping the linking
+     * token means profile switching still works after the first switch, instead
+     * of stranding the device on whichever profile it last chose.
+     */
+    var homeToken: String?
+        get() = prefs.getString(K_HOME_TOKEN, null)?.ifEmpty { null } ?: token
+        set(v) = prefs.edit().putString(K_HOME_TOKEN, v ?: "").apply()
+
+    /** Display name of the active profile, for the Settings screen. */
+    var profileName: String?
+        get() = prefs.getString(K_PROFILE_NAME, null)?.ifEmpty { null }
+        set(v) = prefs.edit().putString(K_PROFILE_NAME, v ?: "").apply()
+
+    /**
+     * Libraries the user has hidden from the home screen.
+     *
+     * Stored as the set of hidden keys rather than the set of shown ones, so a
+     * library added to the server later appears by default. The opposite
+     * default -- an allow-list -- means new content silently never shows up,
+     * which is a far worse failure than having to hide something once.
+     */
+    var hiddenSections: Set<String>
+        get() = prefs.getStringSet(K_HIDDEN_SECTIONS, emptySet()) ?: emptySet()
+        set(v) = prefs.edit().putStringSet(K_HIDDEN_SECTIONS, v).apply()
+
+    fun toggleSectionHidden(sectionKey: String) {
+        hiddenSections = hiddenSections.toMutableSet().apply {
+            if (!add(sectionKey)) remove(sectionKey)
+        }
+    }
 
     /** Base URI of the chosen server, e.g. `https://10-0-0-4.<hash>.plex.direct:32400`. */
     var serverUri: String?
@@ -116,6 +156,8 @@ class Store(context: Context) {
     fun signOut() {
         prefs.edit()
             .remove(K_TOKEN)
+            .remove(K_HOME_TOKEN)
+            .remove(K_PROFILE_NAME)
             .remove(K_SERVER_URI)
             .remove(K_SERVER_TOKEN)
             .remove(K_SERVER_NAME)
@@ -134,5 +176,8 @@ class Store(context: Context) {
         const val K_LAST_RATING_KEY = "last_rating_key"
         const val K_LAST_POSITION = "last_position_ms"
         const val K_LAST_DURATION = "last_duration_ms"
+        const val K_HOME_TOKEN = "home_token"
+        const val K_PROFILE_NAME = "profile_name"
+        const val K_HIDDEN_SECTIONS = "hidden_sections"
     }
 }

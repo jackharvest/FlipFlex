@@ -36,6 +36,19 @@ class RowList(context: Context) : RecyclerView(context) {
         val progress: Float = 0f,
         /** Whatever the screen needs back when this row is chosen. */
         val payload: Any? = null,
+        /**
+         * A group caption rather than a selectable row.
+         *
+         * This is how the Recommended view is possible at all. Plex's own
+         * clients draw those groups as horizontal carousels, which needs
+         * hundreds of pixels of width and a pointer -- neither of which exists
+         * here. A vertical list with captions carries the same grouping in the
+         * one dimension this screen has.
+         *
+         * Headers are skipped by [move], so the cursor never lands on one and
+         * the user never has to press past a row that does nothing.
+         */
+        val isHeader: Boolean = false,
     )
 
     var rows: List<Row> = emptyList()
@@ -65,26 +78,55 @@ class RowList(context: Context) : RecyclerView(context) {
     fun submit(newRows: List<Row>, keepSelection: Boolean = false) {
         val previous = selected
         rows = newRows
-        selected = if (keepSelection) previous.coerceIn(0, (newRows.size - 1).coerceAtLeast(0)) else 0
+        selected = if (keepSelection) {
+            previous.coerceIn(0, (newRows.size - 1).coerceAtLeast(0))
+        } else {
+            0
+        }
+        // A list that opens with a caption at the top must not start with the
+        // cursor on it, or the first press of OK does nothing.
+        if (rows.getOrNull(selected)?.isHeader == true) selected = nextSelectable(selected, +1) ?: selected
         adapter.notifyDataSetChanged()
         if (newRows.isNotEmpty()) {
-            scrollToPosition(selected)
+            // Scroll to the top of a fresh list, not to the selection. They are
+            // different when row 0 is a caption: the cursor starts on row 1, and
+            // scrolling to *that* pushes the caption off the top of the screen,
+            // so a grouped list opened with its first group unlabelled.
+            scrollToPosition(if (keepSelection) selected else 0)
             onMove?.invoke(selected, newRows[selected])
         }
     }
 
+    /** The next index in [dir] that is not a caption, or null if there is none. */
+    private fun nextSelectable(from: Int, dir: Int): Int? {
+        var i = from
+        while (i in rows.indices) {
+            if (!rows[i].isHeader) return i
+            i += dir
+        }
+        return null
+    }
+
     fun move(delta: Int): Boolean {
         if (rows.isEmpty()) return false
-        val next = (selected + delta).coerceIn(0, rows.size - 1)
+        val dir = if (delta < 0) -1 else +1
+        val wanted = (selected + delta).coerceIn(0, rows.size - 1)
+        // Step over captions in the direction of travel, then back the other
+        // way if we ran off the end -- otherwise the last group's caption traps
+        // the cursor at the bottom of the list.
+        val next = nextSelectable(wanted, dir) ?: nextSelectable(wanted, -dir) ?: return false
         if (next == selected) return false
         val was = selected
         selected = next
         adapter.notifyItemChanged(was)
         adapter.notifyItemChanged(next)
+        // Bring the caption along when arriving at the first row of a group,
+        // so you can see which group you have just moved into.
+        val anchor = if (rows.getOrNull(next - 1)?.isHeader == true) next - 1 else next
         // scrollToPosition, not smoothScroll: on a 2.4" list the animation is
         // longer than the gap between two D-pad presses when someone holds the
         // key down, and the list visibly lags behind the cursor.
-        (layoutManager as LinearLayoutManager).scrollToPosition(next)
+        (layoutManager as LinearLayoutManager).scrollToPosition(anchor)
         onMove?.invoke(next, rows[next])
         return true
     }
@@ -131,6 +173,12 @@ class RowList(context: Context) : RecyclerView(context) {
         private val progress: ProgressBar = view.findViewById(R.id.row_progress)
 
         fun bind(row: Row, isSelected: Boolean) {
+            if (row.isHeader) {
+                bindHeader(row)
+                return
+            }
+            root.setPadding(dp(8), dp(4), dp(8), dp(4))
+            title.textSize = 13f
             title.text = row.title
             subtitle.text = row.subtitle
             trailing.text = row.trailing
@@ -160,5 +208,25 @@ class RowList(context: Context) : RecyclerView(context) {
             trailing.setTextColor(dim)
             time.setTextColor(dim)
         }
+
+        /**
+         * A group caption. Amber, small, tight, and never highlighted -- it has
+         * to read as a label rather than as something you could press, on a
+         * screen where the only affordance is the selection bar.
+         */
+        private fun bindHeader(row: Row) {
+            val ctx = itemView.context
+            root.setBackgroundColor(0)
+            root.setPadding(dp(8), dp(6), dp(8), dp(1))
+            title.text = row.title
+            title.textSize = 9f
+            title.setTextColor(ctx.getColor(R.color.ff_amber))
+            trailing.text = ""
+            secondLine.visibility = View.GONE
+            progress.visibility = View.GONE
+        }
+
+        private fun dp(v: Int): Int =
+            (v * itemView.resources.displayMetrics.density).toInt()
     }
 }

@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Profile PIN entry.
+
+     A numeric keypad is the one thing this handset is unambiguously good at, so
+     a Plex Home PIN is the rare case where it beats a touchscreen. The digits
+     are shown as filled/empty pips rather than as numbers: the screen is read at
+     arm's length in a room with other people in it, and there is no reason for
+     the PIN itself to be legible from across a sofa. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:paddingHorizontal="12dp"
+    android:background="@color/ff_ground">
+
+    <TextView
+        android:id="@+id/pin_who"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:textColor="@color/ff_text"
+        android:textSize="13sp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/pin_prompt"
+        android:textColor="@color/ff_text_dim"
+        android:textSize="10sp"
+        android:paddingBottom="16dp" />
+
+    <TextView
+        android:id="@+id/pin_pips"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:letterSpacing="0.35"
+        android:textColor="@color/ff_amber"
+        android:textSize="26sp" />
+
+    <TextView
+        android:id="@+id/pin_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:paddingTop="18dp"
+        android:text="@string/pin_hint"
+        android:textColor="@color/ff_text_dim"
+        android:textSize="9sp" />
+</LinearLayout>

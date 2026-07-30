@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A list, with an optional A-Z rail down the right edge.
+
+     The rail is the same idea as the letter strip in the Plex mobile app, and
+     it exists for the same reason: a library of several hundred titles cannot be
+     reached one D-pad press at a time. It is 15dp wide, which is as narrow as
+     a legible 7sp letter goes and leaves the list its full 225dp.
+
+     Hidden entirely for lists where letters are meaningless, such as Continue
+     Watching or a season's episodes. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal">
+
+    <FrameLayout
+        android:id="@+id/browse_list_holder"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1" />
+
+    <LinearLayout
+        android:id="@+id/letter_rail"
+        android:layout_width="15dp"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:background="@color/ff_surface"
+        android:visibility="gone" />
+</LinearLayout>

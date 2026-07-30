@@ -66,6 +66,9 @@ class LinkActivity : FlipActivity() {
                 val token = PlexAuth.checkPin(pin.id) ?: continue
 
                 store.token = token
+                // Recorded separately, and this is the token profile switching
+                // uses later -- see Store.homeToken.
+                store.homeToken = token
                 statusView.text = getString(R.string.msg_loading)
 
                 // Pick a server before leaving, so Home opens onto content

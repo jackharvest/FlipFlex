@@ -53,6 +53,11 @@
             android:screenOrientation="portrait"
             android:configChanges="keyboardHidden|orientation|screenSize" />
 
+        <activity
+            android:name=".ui.SettingsActivity"
+            android:screenOrientation="portrait"
+            android:configChanges="keyboardHidden|orientation|screenSize" />
+
         <!-- The only landscape screen in the app. A 16:9 video across the 320
              axis is 320x180 instead of 240x135, which is 1.8x the picture area
              on a panel where the picture is the whole experience. -->

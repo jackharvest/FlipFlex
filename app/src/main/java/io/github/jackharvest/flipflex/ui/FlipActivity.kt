@@ -93,6 +93,20 @@ abstract class FlipActivity : AppCompatActivity() {
         frame.addView(view, 0)
     }
 
+    /**
+     * Put a view *over* the body but under the message and options panel.
+     *
+     * [setBody] deliberately inserts at index 0, so passing a modal to it puts
+     * the modal behind the list -- which is exactly what happened to the PIN
+     * pad: it rendered, took keys, and was drawn underneath the profile list it
+     * was supposed to replace.
+     */
+    protected fun addOverlay(view: View) {
+        val frame = findViewById<android.widget.FrameLayout>(R.id.content)
+        val message = findViewById<View>(R.id.content_message)
+        frame.addView(view, frame.indexOfChild(message).coerceAtLeast(0))
+    }
+
     protected fun setHeader(title: String, showChevron: Boolean = true) {
         headerTitle.text = title
         headerChevron.visibility = if (showChevron) View.VISIBLE else View.GONE

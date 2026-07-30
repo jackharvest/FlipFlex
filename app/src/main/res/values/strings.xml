@@ -18,5 +18,9 @@
     <string name="msg_loading">Loading…</string>
     <string name="msg_empty">Nothing here.</string>
     <string name="msg_no_server">No Plex server reachable.\nCheck Wi-Fi, then press OK.</string>
+    <string name="pin_prompt">needs a PIN</string>
+    <string name="pin_hint">Digits to enter · Back to delete · OK to confirm</string>
+    <string name="pin_wrong">Wrong PIN. Try again.</string>
+
     <string name="msg_offline">Cannot reach Plex.\nPress OK to retry.</string>
 </resources>
