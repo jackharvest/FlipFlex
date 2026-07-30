@@ -197,7 +197,7 @@ be installed. This is a binary go/no-go.
 - [x] **9. Set `ro.vendor.tct.endurance`, verify APK install** —
       `tools/inject-endurance.sh`. **`adb install` → `Success`.**
 - [x] **11. Root** — Magisk app + Superuser tab → enable `com.android.shell`.
-- [ ] **10. Gate test** — 4 of 5 passed, see below.
+- [x] **10. Gate test** — **all 5 passed**, see below. **PHASE 0 IS CLOSED.**
 
 ## Step 10 — the gate
 
@@ -205,9 +205,14 @@ be installed. This is a binary go/no-go.
 |---|---|---|
 | 1 | `endurance` reads true | **PASS** — `su -c 'getprop ro.vendor.tct.endurance'` → `true`. Reads empty as shell; see CLAUDE.md |
 | 2 | `adb install` succeeds | **PASS** — `Success`, and no `forbidden installation` in logcat |
-| 3 | App launches / appears in drawer | not yet — needs a real APK of ours |
-| 4 | Every key gives a distinct keycode | mapping known (`docs/keymap.md`); `onKeyDown` pass still outstanding |
+| 3 | App launches / appears in drawer | **PASS** — our own debug APK installs, registers `category.LAUNCHER`, and takes window focus |
+| 4 | Every key gives a distinct keycode | **PASS, with corrections** — 23 keys delivered, 5 not. See the VERIFIED section of `docs/keymap.md` |
 | 5 | `wm size` / `wm density` after reset | **PASS** — 240x320, density 160 |
+
+Test 4 did not simply confirm the `.kl` table — it corrected it. The softkeys do
+arrive (the one result the whole UI design depended on), but the four "spare"
+hardware keys the `.kl` files advertise are not usable at all, and the lid never
+reaches an app. Details and the raw `getevent` evidence are in `docs/keymap.md`.
 
 ## Step 4 — BROM mode and the backup
 

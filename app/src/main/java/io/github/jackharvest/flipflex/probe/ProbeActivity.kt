@@ -48,6 +48,7 @@ class ProbeActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityProbeBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        restore()
         render()
     }
 
@@ -101,8 +102,13 @@ class ProbeActivity : AppCompatActivity() {
                 name = KeyEvent.keyCodeToString(event.keyCode),
             )
         }
+        val isNew = entry.count == 0 && entry.paths.size <= 1
         entry.paths += path
         if (event.action == KeyEvent.ACTION_DOWN) entry.count++
+        // Save on every new key, not just on exit. The POWER key backgrounds the
+        // app and never reaches us, so an exit-only dump loses the whole run --
+        // which is exactly what happened on the first pass.
+        if (isNew) dump()
 
         Log.i(
             TAG,
@@ -127,6 +133,33 @@ class ProbeActivity : AppCompatActivity() {
     }
 
     /**
+     * Reload a previous run's table, so a POWER press -- which backgrounds the
+     * app without ever reaching it -- costs the tester nothing but a relaunch.
+     */
+    private fun restore() {
+        val f = File(getExternalFilesDir(null), FILE)
+        if (!f.exists()) return
+        runCatching {
+            f.readLines()
+                .filterNot { it.startsWith("#") || it.isBlank() }
+                .forEach { line ->
+                    val c = line.split("\t")
+                    if (c.size < 6) return@forEach
+                    val keyCode = c[1].toInt()
+                    val scanCode = c[3].toInt()
+                    seen[keyCode to scanCode] = Entry(
+                        index = c[0].toInt(),
+                        keyCode = keyCode,
+                        scanCode = scanCode,
+                        name = c[2],
+                        paths = c[4].map { it.toString() }.toCollection(linkedSetOf()),
+                        count = c[5].toInt(),
+                    )
+                }
+        }.onFailure { Log.w(TAG, "could not restore $FILE", it) }
+    }
+
+    /**
      * Write the table where `adb pull` can reach it, so docs/keymap.md can be
      * filled in from a file rather than by transcribing off a 240x320 screen.
      */
@@ -142,13 +175,14 @@ class ProbeActivity : AppCompatActivity() {
             }
         }
         runCatching {
-            File(getExternalFilesDir(null), "keyprobe.tsv").writeText(text)
-        }.onFailure { Log.w(TAG, "could not write keyprobe.tsv", it) }
+            File(getExternalFilesDir(null), FILE).writeText(text)
+        }.onFailure { Log.w(TAG, "could not write $FILE", it) }
         Log.i(TAG, "PROBE RESULT\n$text")
     }
 
     companion object {
         // Short tag: `adb logcat -s FlipFlexProbe:V` is the whole read path.
         private const val TAG = "FlipFlexProbe"
+        private const val FILE = "keyprobe.tsv"
     }
 }
