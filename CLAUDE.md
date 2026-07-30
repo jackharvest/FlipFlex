@@ -71,6 +71,32 @@ can take away** — flip2 issue #42 reports newer TCL builds disabling that code
 The 4058 vendor framework refuses every APK install unless
 `ro.vendor.tct.endurance` is true, and that property cannot be set without root.
 
+**What the refusal actually looks like**, because the error message is a lie:
+
+```
+adb: Failure [INSTALL_FAILED_INSUFFICIENT_STORAGE: Failed rename]
+```
+
+with 11 GB free. Storage has nothing to do with it. The real event is in logcat:
+
+```
+PackageManager: mIsAllowInstall= false,APK_INSTALL_FINISH=true
+PackageManager: App forbidden installation <pkg>
+  PackageManagerService$PrepareFailure: App forbidden installation
+    at PackageManagerService.installPackagesLI(PackageManagerService.java:17165)
+```
+
+So TCL patched `PackageManagerService` itself. `strings` on
+`/system/framework/services.jar` shows `mIsEndurance`, `mIsAllowInstall`,
+`APK_INSTALL_FINISH` and `ro.vendor.tct.endurance` together, and
+**`ro.vendor.tct.endurance` is the only `tct` property in the entire jar** — so
+that really is the single gate, and there is no second flag to discover later.
+
+It also confirms the fix has to happen at boot: `setprop` on a `ro.` property is
+refused at runtime (`Failed to set property`), which is why this needs
+`resetprop` from Magisk rather than anything simpler. Confirmed still empty and
+still blocking *after* the unlock — unlocking does not relax it.
+
 The community answer is to flash `neutron.img` from `neutronscott/flip2`.
 **We are not doing that**, on evidence from their own tracker:
 
