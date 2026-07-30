@@ -16,6 +16,11 @@ local.properties
 *.aab
 *.keystore
 
+# Design reference photographed on the handset. 1.7 MB, and its own filename
+# says it is temporary -- it guides the layout work and is deleted when the UI
+# lands, so it is not worth putting in history.
+Proof Of Concept Art Reference (Delete At End of Project).png
+
 .DS_Store
 
 # The Magisk patching kit, extracted from the APK by tools/setup-magisk.sh.

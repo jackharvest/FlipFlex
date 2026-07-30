@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.FlipFlex" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@color/ff_ground</item>
+        <item name="android:textColor">@color/ff_text</item>
+        <item name="android:statusBarColor">@color/ff_ground</item>
+        <item name="colorAccent">@color/ff_amber</item>
+    </style>
+</resources>
