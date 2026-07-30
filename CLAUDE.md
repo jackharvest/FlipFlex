@@ -51,6 +51,38 @@ this**, it wants a kext approval and a reboot for nothing.
 Skip `pyside6`/`shiboken6` from their `requirements.txt` — GUI only, and the
 most fragile part of the install.
 
+## Getting root, and driving the on-screen UI
+
+Root needs the Magisk app, which needs installs to work, which needs
+`endurance` — so it comes *last*, not first. After the app is installed and has
+done its own setup reboot:
+
+1. Magisk **Settings → Superuser access** is already `Apps and ADB`. Not the problem.
+2. **Superuser tab → `[Share dUID] com.android.shell` → toggle ON.** This is the
+   one that matters. The first `su` request pops a dialog with a **10 second**
+   timeout; if nobody answers it, Magisk stores a *deny* policy for that uid and
+   every later request fails instantly with no prompt at all. That looks like a
+   broken setting and is not.
+
+**The Magisk UI cannot be navigated on this handset** — 240×320 with a D-pad
+cannot reach the settings gear. Drive it over adb instead, which is how the
+above was actually done:
+
+```sh
+adb exec-out screencap -p > /tmp/s.png     # then just look at it
+adb shell uiautomator dump /sdcard/ui.xml  # exact tap coordinates, needs screen awake
+adb shell input tap <x> <y>
+adb shell input swipe 120 270 120 70 300   # scroll down
+```
+
+`uiautomator dump` returns `null root node` if the screen is asleep —
+`input keyevent KEYCODE_WAKEUP` first. The dump is far more reliable than
+reading coordinates off a screenshot, and the screenshot is more reliable than
+guessing which screen you are on.
+
+This is also the clearest possible statement of why FlipFlex exists: a stock
+Android app's UI is simply not operable on this device.
+
 ## Driving the phone
 
 ```sh
@@ -113,6 +145,16 @@ lie to you, in the same direction:
 
 So the property reads empty from adb **whether or not it is set**. It was in fact
 being set correctly for many attempts before that was understood.
+
+Proven side by side on one boot, once root was available:
+
+```
+getprop ro.vendor.tct.endurance                    ->  []       (as shell)
+su -c 'getprop ro.vendor.tct.endurance'            ->  [true]   (as root)
+su -c 'getprop | grep endurance'  ->  [ro.vendor.tct.endurance]: [true]
+```
+
+**Read it as root, or not at all.**
 
 Do not be reassured by other `ro.vendor.*` properties being readable — 52 of them
 are, but they live in `vendor_mtk_default_prop` and `exported_default_prop`,

@@ -6,9 +6,7 @@
 > Bootloader unlocked, own boot dumped and Magisk-patched, `endurance` set at
 > boot, APKs install, Magisk app installed. FOTA disabled. 240×320 @ 160 intact.
 >
-> **Only remaining step for full root:** open the Magisk app **on the handset**
-> once so it completes its setup, then `su` can be granted to adb. Installs
-> already work without it, so nothing is blocked on this.
+> **Root works too:** `su -c id` → `uid=0(root) … u:r:magisk:s0`.
 >
 > **Never validate `endurance` with `getprop` — it cannot see it.** Install an
 > APK instead, after `sys.boot_completed=1`. See CLAUDE.md; this cost about
@@ -192,13 +190,14 @@ be installed. This is a binary go/no-go.
       with a read-back check that caught a genuinely corrupt write.
 - [x] **9. Set `ro.vendor.tct.endurance`, verify APK install** —
       `tools/inject-endurance.sh`. **`adb install` → `Success`.**
-- [ ] **10. Gate test** — 3 of 5 passed, see below.
+- [x] **11. Root** — Magisk app + Superuser tab → enable `com.android.shell`.
+- [ ] **10. Gate test** — 4 of 5 passed, see below.
 
 ## Step 10 — the gate
 
 | # | Test | Result |
 |---|---|---|
-| 1 | `endurance` reads true | **untestable by design** — `getprop` cannot see `vendor_default_prop`. Superseded by test 2 |
+| 1 | `endurance` reads true | **PASS** — `su -c 'getprop ro.vendor.tct.endurance'` → `true`. Reads empty as shell; see CLAUDE.md |
 | 2 | `adb install` succeeds | **PASS** — `Success`, and no `forbidden installation` in logcat |
 | 3 | App launches / appears in drawer | not yet — needs a real APK of ours |
 | 4 | Every key gives a distinct keycode | mapping known (`docs/keymap.md`); `onKeyDown` pass still outstanding |
