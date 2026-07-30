@@ -22,12 +22,22 @@ for.
 Run this BEFORE connecting. It waits.
 """
 import glob
+import os
 import sys
 import time
 
 try:
     from serial import Serial
 except ImportError:
+    # pyserial lives only in mtkclient's venv, not in the system python3 that
+    # our shebang resolves to. Re-exec rather than fail: the preloader window is
+    # 2-3 seconds wide and always arrives while someone is holding the phone, so
+    # "wrong interpreter" must not be a thing you discover at that moment.
+    _venv = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                         "..", "vendor", "mtkclient", ".venv", "bin", "python")
+    if os.path.exists(_venv) and not os.environ.get("BOOTSEQ_REEXEC"):
+        os.environ["BOOTSEQ_REEXEC"] = "1"
+        os.execv(_venv, [_venv, os.path.abspath(__file__)] + sys.argv[1:])
     sys.exit("pyserial missing. Use vendor/mtkclient/.venv/bin/python, or pip install pyserial")
 
 BOOTSEQ = bytes(sys.argv[1] if len(sys.argv) > 1 else "FASTBOOT", "ascii")
