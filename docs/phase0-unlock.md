@@ -2,15 +2,22 @@
 
 **Live runbook. Update the status line after every step.**
 
-> **STATUS: in fastboot, holding at `fastboot flashing unlock`.**
-> Nothing has ever been written to this device. Fastboot is four for four,
-> attempt 0 every time. `recovery2.img` is verified, the Magisk kit is staged
-> (6a), and everything readable before the wipe has been read — flags, the
-> by-name listing, and the keypad (`docs/keymap.md`).
+> **STATUS: UNLOCKED. `unlocked: yes`, `secure: no`. Factory reset has happened.**
+> The phone is in setup wizard, no SIM, and must not touch a network until FOTA
+> is disabled again.
 >
-> Once unlocked, go **straight to recovery** and never boot Android: recovery's
-> adb needs no RSA re-authorisation, so the dump can happen before the phone has
-> any chance to reach a network. Pull the SIM first.
+> **Resume here:**
+> 1. Through the wizard offline — skip Wi-Fi, skip the account, no screen lock.
+> 2. Re-enable ADB: dial `*#*#33284#*#*`, accept the RSA prompt.
+> 3. **`adb shell pm disable-user com.tcl.fota.system`** — closes the OTA race.
+> 4. Then step 5, the dump — but `fastboot boot` does not work on this LK (see
+>    below), so `recovery2.img` has to be *flashed* to `recovery` to be used.
+>    That is a write to a partition we have no backup of. It is the least-bad
+>    partition to lose and the only lever left; decide it explicitly.
+>
+> The plan to go straight from unlock to recovery without booting Android did not
+> survive `fastboot boot` failing — the failed handoff booted Android and took
+> the factory reset with it.
 >
 > **The pre-unlock backup is now definitively impossible** -- see below. The
 > next action is the destructive one, and it needs Mike's word:
@@ -21,23 +28,45 @@
 > 4. **Re-disable FOTA before the phone ever reaches a network** -- see
 >    "The factory reset costs us more than /data".
 
-## `fastboot boot` is implemented, and gated on lock state alone
+## `fastboot boot` does not work on this LK. Do not rely on it.
 
-Answered, with `recovery2.img` as the runbook required:
+Tested twice with `recovery2.img`, once locked and once unlocked. Locked:
 
 ```
 Sending 'boot.img' (24576 KB)    OKAY [  1.343s]
 Booting                          FAILED (remote: 'not allowed in locked state')
 ```
 
-Two things follow. The good one: LK does implement `boot`, so once unlocked a
-candidate boot image can be *tried* without being written -- a wrong image will
-cost a power cycle instead of a bootloop. The bad one: it is refused while
-locked, which closes the last door on backing anything up first.
+That read like "implemented, merely gated", and it was recorded that way. It was
+wrong. Unlocked, the same command gives:
+
+```
+Sending 'boot.img' (24576 KB)    OKAY [  1.342s]
+Booting                          FAILED (usb_read failed with status e00002ed)
+```
+
+and **the phone then boots Android normally**. So the upload succeeds, the
+handoff does not, and LK falls through to a normal boot. The lock-state refusal
+was a check happening *before* a code path that does not work anyway.
+
+The consequence is the one that costs us: there is **no way to try a boot image
+without writing it** on this device. A candidate patched boot has to be flashed
+to be tested, so every attempt is a real write and a possible bootloop, and the
+stock `boot.img` in hand is the only thing standing behind it. This is why the
+dump is not optional and why it comes before any flash.
 
 **A valid image is rejected cleanly and the channel survives** -- `getvar` still
-answered afterwards. It was specifically the malformed image that wedged LK, so
-the "do not probe with junk" rule is about malformedness, not about `boot`.
+answered afterwards, both times. It was specifically the malformed image that
+wedged LK, so the "do not probe with junk" rule is about malformedness, not about
+`boot`.
+
+### The unlock itself
+
+`fastboot flashing unlock` → `(bootloader) Start unlock flow`, then LK prompts
+**on the handset** — volume-up to confirm. 18 s wall clock, waiting on that
+press. Afterwards `unlocked: yes` and **`secure: no`**, and the phone stayed in
+fastboot rather than rebooting. The factory reset then happened on the next
+Android boot, which is what `fastboot boot` accidentally triggered.
 
 ### Every read path, and why each is closed before the unlock
 
