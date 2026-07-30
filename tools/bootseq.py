@@ -64,7 +64,12 @@ print(f"watching {PATTERN} -- phone OFF, BATTERY IN, plug in, press nothing")
 # not: with the battery out this device reached FASTBOOT, browned out, and
 # went black before enumerating. The window appears identically either way.
 
-deadline = time.time() + 300
+# 5 minutes is fine when you arm this and immediately reach for the phone, but
+# too short when someone else arms it and you are still finding the back cover.
+# BOOTSEQ_TIMEOUT=1800 keeps it alive across that hand-off.
+timeout = int(os.environ.get("BOOTSEQ_TIMEOUT", "300"))
+print(f"waiting up to {timeout}s (BOOTSEQ_TIMEOUT to change)")
+deadline = time.time() + timeout
 spun = 0
 while time.time() < deadline:
     port = find_port()
