@@ -2,24 +2,68 @@
 
 **Live runbook. Update the status line after every step.**
 
-> **STATUS: paused at step 7, awaiting a go/no-go on the unlock.**
+> **STATUS: at step 7, awaiting a go/no-go on the unlock.**
 > Nothing has ever been written to this device. Fastboot is reachable and
-> repeatable. mtkclient is ruled out, so the backup cannot precede the unlock;
-> `recovery2.img` is downloaded and verified and is the read path immediately
-> after it.
+> repeatable (three for three). The channel is healthy. `recovery2.img` is
+> downloaded and verified.
 >
-> **Resume here:**
-> 1. Battery pull, reinsert (LK's command channel is wedged from the junk-image
->    probe -- `fastboot devices` lists it but `getvar` hangs).
-> 2. `tools/bootseq.py FASTBOOT`, then phone OFF / battery IN / plug in / no buttons.
-> 3. `fastboot getvar unlocked` to confirm the channel is healthy again.
-> 4. Then, on Mike's word: `fastboot flashing unlock` (**WIPES**), then
->    `fastboot boot backups/recovery2.img`, then `tools/dump-from-recovery.sh`.
+> **The pre-unlock backup is now definitively impossible** -- see below. The
+> next action is the destructive one, and it needs Mike's word:
 >
-> Open question, still unanswered: does this LK implement `fastboot boot`? Test
-> it with `recovery2.img`, never with a junk file.
+> 1. `fastboot flashing unlock` (**WIPES /data**)
+> 2. `fastboot boot backups/recovery2.img`
+> 3. `tools/dump-from-recovery.sh`
+> 4. **Re-disable FOTA before the phone ever reaches a network** -- see
+>    "The factory reset costs us more than /data".
 
-## How to get into fastboot (works, two for two, attempt 0 each time)
+## `fastboot boot` is implemented, and gated on lock state alone
+
+Answered, with `recovery2.img` as the runbook required:
+
+```
+Sending 'boot.img' (24576 KB)    OKAY [  1.343s]
+Booting                          FAILED (remote: 'not allowed in locked state')
+```
+
+Two things follow. The good one: LK does implement `boot`, so once unlocked a
+candidate boot image can be *tried* without being written -- a wrong image will
+cost a power cycle instead of a bootloop. The bad one: it is refused while
+locked, which closes the last door on backing anything up first.
+
+**A valid image is rejected cleanly and the channel survives** -- `getvar` still
+answered afterwards. It was specifically the malformed image that wedged LK, so
+the "do not probe with junk" rule is about malformedness, not about `boot`.
+
+### Every read path, and why each is closed before the unlock
+
+This is now exhaustive, which is what makes the ordering forced rather than
+merely inconvenient:
+
+| Path | Status |
+|---|---|
+| BROM (`0e8d:0003`) | never enumerates, no key combination produces it |
+| Preloader (`0e8d:2000`) | enumerates, but speaks only TCL's 8-byte protocol, not MediaTek's handshake -- mtkclient fails identically over libusb and `--serialport` |
+| `fastboot boot recovery2.img` | `not allowed in locked state` |
+| `adb shell` + `dd` | no root, and root is the thing we are trying to get |
+
+So the unlock genuinely must come first, and step 4's BROM backup is not
+merely deferred, it is unreachable on this unit. The recovery dump replaces it.
+
+## The factory reset costs us more than /data
+
+`flashing unlock` factory-resets, and package enable/disable state lives in
+`/data/system/packages.xml`. So **the reset re-enables `com.tcl.fota.system`**,
+which we disabled in step 3b precisely because flip2 issue #42 reports newer
+TCL builds removing the `*#*#33284#*#*` ADB code. That creates a race we only
+get one shot at: if an OTA lands after the reset but before we re-disable FOTA,
+it can take ADB away permanently and there is no path back.
+
+**Therefore: no SIM, no Wi-Fi, no network of any kind after the reset until
+`pm disable-user com.tcl.fota.system` is back in place.** Also lost and needing
+redoing: the ADB RSA authorisation, the `*#*#33284#*#*` enablement, developer
+options, and the OEM-unlock toggle.
+
+## How to get into fastboot (works, three for three, attempt 0 each time)
 
 ```sh
 tools/bootseq.py FASTBOOT          # arm it FIRST, it waits
@@ -79,10 +123,14 @@ be installed. This is a binary go/no-go.
       mid-project would cost us ADB. Reversible: `pm enable com.tcl.fota.system`.
 - [x] **3c. mtkclient installed** — `tools/mtk`, v2.1.4, MT6739 confirmed
       supported (`dacode=0x6739`, `loader="mt6739_payload.bin"`).
-- [ ] **4. BROM backup** ← **YOU ARE HERE**
-- [ ] **5. Dump our own stock boot.img**
-- [ ] **6. Patch it with Magisk (via emulator)**
+- [x] **4. BROM backup** — **impossible on this unit, abandoned.** BROM never
+      enumerates and the preloader will not talk to mtkclient. Superseded by
+      step 5, which is why 7 now comes before it.
 - [ ] **7. `fastboot flashing unlock`** — destructive, factory-resets
+      ← **YOU ARE HERE**
+- [ ] **5. Dump our own stock boot.img** — `fastboot boot backups/recovery2.img`
+      then `tools/dump-from-recovery.sh`. First thing after the unlock.
+- [ ] **6. Patch it with Magisk (via emulator)**
 - [ ] **8. Flash the patched boot**
 - [ ] **9. Set `ro.vendor.tct.endurance`, verify APK install**
 - [ ] **10. Gate test** — see below
