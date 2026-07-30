@@ -88,14 +88,26 @@ object PlexPlayback {
      */
     suspend fun preflight(url: String, token: String): Int {
         var code = -1
-        repeat(3) { attempt ->
+        BACKOFF_MS.forEachIndexed { attempt, wait ->
             code = PlexClient.status(url, token)
             if (code == 200) return 200
-            Log.w(TAG, "preflight attempt ${attempt + 1} got HTTP $code")
-            if (attempt < 2) kotlinx.coroutines.delay(2_000)
+            Log.w(TAG, "preflight attempt ${attempt + 1} got HTTP $code, waiting ${wait}ms")
+            if (wait > 0) kotlinx.coroutines.delay(wait)
         }
         return code
     }
+
+    /**
+     * Waits between preflight attempts. Total patience is about 20 seconds.
+     *
+     * The first version tried three times over six seconds and that was not
+     * enough: with five other clients on the server and three transcodes already
+     * running, a title that had played a minute earlier returned 400 on every
+     * attempt, and the identical URL succeeded by hand shortly after. A busy
+     * household is the normal case for a home Plex server, so the retry has to
+     * outlast a transcoder queue rather than just a momentary hiccup.
+     */
+    private val BACKOFF_MS = longArrayOf(1_500, 3_000, 5_000, 8_000, 0)
 
     /**
      * Report progress. This is what makes resume work -- here and on every

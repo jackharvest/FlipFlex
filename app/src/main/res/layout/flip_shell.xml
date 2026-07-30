@@ -52,6 +52,7 @@
     </LinearLayout>
 
     <View
+        android:id="@+id/header_rule"
         android:layout_width="match_parent"
         android:layout_height="1dp"
         android:background="@color/ff_rule" />
@@ -119,6 +120,7 @@
     </FrameLayout>
 
     <View
+        android:id="@+id/softkey_rule"
         android:layout_width="match_parent"
         android:layout_height="1dp"
         android:background="@color/ff_rule" />
@@ -126,8 +128,13 @@
     <!-- Left label sits over the left softkey, right over the right. The
          hardware back arrow handles going up a level, which is why neither of
          these says "Back" — spending one of only two softkeys on a function
-         that already has a dedicated physical button would waste half of them. -->
+         that already has a dedicated physical button would waste half of them.
+
+         The player hides this whole band (see setImmersive): during playback
+         every row of pixels belongs to the picture, and it draws its own
+         auto-hiding copy of these labels instead. -->
     <LinearLayout
+        android:id="@+id/softkey_bar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"

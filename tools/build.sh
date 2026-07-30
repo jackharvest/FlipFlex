@@ -25,7 +25,10 @@ export JAVA_HOME
 APK=app/build/outputs/apk/debug/app-debug.apk
 PKG=io.github.jackharvest.flipflex
 
-./gradlew :app:assembleDebug "$@" >/dev/null 2>&1 || ./gradlew :app:assembleDebug
+# "$@" is NOT passed through: the arguments to this script are install/run, and
+# handing those to Gradle makes it fail with "task 'install' not found" while
+# the real compile error scrolls past in the suppressed output.
+./gradlew :app:assembleDebug || exit 1
 echo "built $APK"
 
 case "$1" in

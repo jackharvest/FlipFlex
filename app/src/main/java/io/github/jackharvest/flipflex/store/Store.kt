@@ -57,6 +57,59 @@ class Store(context: Context) {
         get() = prefs.getString(K_SERVER_CLIENT_ID, null)?.ifEmpty { null }
         set(v) = prefs.edit().putString(K_SERVER_CLIENT_ID, v ?: "").apply()
 
+    /**
+     * The transcode session id of the last thing we played.
+     *
+     * Persisted because `PlayerActivity.onDestroy` is the only thing that tears
+     * a session down, and it does not run when the app is killed -- a crash, a
+     * force-stop, or `adb install -r` over a running build. The session then
+     * stays open on the server and the *next* play attempt fails preflight with
+     * a bare HTTP 400, which reads like a broken app rather than a leftover.
+     *
+     * Observed exactly that way: reinstalling mid-playback left a transcode at
+     * 4.9% and the following play returned 400 until it was cleared by hand.
+     */
+    var lastSession: String?
+        get() = prefs.getString(K_LAST_SESSION, null)?.ifEmpty { null }
+        set(v) = prefs.edit().putString(K_LAST_SESSION, v ?: "").apply()
+
+    /**
+     * Enough to close out a playback the app never got to finish.
+     *
+     * Stopping the transcode is not sufficient on its own. Plex refuses a new
+     * transcode for an item it believes still has a live session, and that
+     * refusal is **item-scoped, not client-scoped** -- measured: with a stale
+     * session on ratingKey 53033, a request from a completely different client
+     * identifier was also refused with 400, while a different item from the same
+     * client succeeded. The only thing that clears it is a `state=stopped`
+     * timeline for that item.
+     *
+     * The position is stored with it because the recovery report must send the
+     * *real* position. Sending `stopped` with `time=0` would clear the resume
+     * point, turning a crash into lost progress.
+     */
+    var lastRatingKey: String?
+        get() = prefs.getString(K_LAST_RATING_KEY, null)?.ifEmpty { null }
+        set(v) = prefs.edit().putString(K_LAST_RATING_KEY, v ?: "").apply()
+
+    var lastPositionMs: Long
+        get() = prefs.getLong(K_LAST_POSITION, 0L)
+        set(v) = prefs.edit().putLong(K_LAST_POSITION, v).apply()
+
+    var lastDurationMs: Long
+        get() = prefs.getLong(K_LAST_DURATION, 0L)
+        set(v) = prefs.edit().putLong(K_LAST_DURATION, v).apply()
+
+    /** Forget the in-flight playback. Called once it has been closed out. */
+    fun clearLastPlayback() {
+        prefs.edit()
+            .remove(K_LAST_SESSION)
+            .remove(K_LAST_RATING_KEY)
+            .remove(K_LAST_POSITION)
+            .remove(K_LAST_DURATION)
+            .apply()
+    }
+
     val isLinked: Boolean get() = token != null
     val hasServer: Boolean get() = serverUri != null && serverToken != null
 
@@ -77,5 +130,9 @@ class Store(context: Context) {
         const val K_SERVER_TOKEN = "server_token"
         const val K_SERVER_NAME = "server_name"
         const val K_SERVER_CLIENT_ID = "server_client_id"
+        const val K_LAST_SESSION = "last_session"
+        const val K_LAST_RATING_KEY = "last_rating_key"
+        const val K_LAST_POSITION = "last_position_ms"
+        const val K_LAST_DURATION = "last_duration_ms"
     }
 }

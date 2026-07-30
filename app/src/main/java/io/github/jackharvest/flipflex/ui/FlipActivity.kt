@@ -8,6 +8,9 @@ import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import io.github.jackharvest.flipflex.R
 import io.github.jackharvest.flipflex.input.Action
 import io.github.jackharvest.flipflex.input.KeyMap
@@ -93,6 +96,36 @@ abstract class FlipActivity : AppCompatActivity() {
     protected fun setHeader(title: String, showChevron: Boolean = true) {
         headerTitle.text = title
         headerChevron.visibility = if (showChevron) View.VISIBLE else View.GONE
+    }
+
+    /**
+     * Give the whole panel to the body: no header, no softkey bar, no status bar.
+     *
+     * Only the player uses this, and the arithmetic is why. Rotated, the panel
+     * is 320x240. The status bar takes ~24, the header ~26 and the softkey bar
+     * ~22, which is 72 of 240 -- **thirty percent of the screen** spent on
+     * chrome, on a device where the picture is the entire point. Immersive gets
+     * all of it back, and the player draws its own auto-hiding copy of the two
+     * softkey labels over the video instead.
+     *
+     * The status bar is hidden via WindowInsetsController because this app is
+     * API 30 only; `systemUiVisibility` is deprecated from exactly this release.
+     * BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE is set so the bar can still be
+     * summoned, which matters because there is no touchscreen to swipe with and
+     * the alternative -- a bar that can never come back -- is worse.
+     */
+    protected fun setImmersive() {
+        findViewById<View>(R.id.header_bar).visibility = View.GONE
+        findViewById<View>(R.id.header_rule).visibility = View.GONE
+        findViewById<View>(R.id.softkey_bar).visibility = View.GONE
+        findViewById<View>(R.id.softkey_rule).visibility = View.GONE
+
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            hide(WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
     }
 
     protected fun setSoftKeys(left: String?, right: String?) {

@@ -1,97 +1,128 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Now Playing.
+<!-- Now Playing. Landscape, immersive, and nothing permanent on screen but the
+     picture.
 
-     The video sits in a fixed band at the top rather than filling the screen. A
-     16:9 file on a 240-wide panel is 240x135, so "fullscreen" would be that same
-     picture with 90dp of black above and below it — the letterbox is
-     unavoidable, and putting the title and progress in it instead of black is
-     free. It also means the transport state is visible without an overlay that
-     has to be summoned and dismissed on a device with four spare keys. -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+     Rotated the panel is 320x240, so a 16:9 video is 320x180 instead of the
+     240x135 it gets in portrait. Every piece of chrome that stays visible eats
+     into that: the status bar, the shell header and the shell softkey bar
+     together are 72 of 240 rows. So all three are hidden (see
+     FlipActivity.setImmersive) and the controls below are drawn *over* the
+     video, on a scrim, and fade themselves out after a few seconds.
+
+     There is no layout-land variant because PlayerActivity is pinned to
+     landscape in the manifest and can never be in any other orientation. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="@color/ff_ground">
+    android:background="#FF000000">
 
     <androidx.media3.ui.PlayerView
         android:id="@+id/player_view"
         android:layout_width="match_parent"
-        android:layout_height="150dp"
+        android:layout_height="match_parent"
         android:background="#FF000000"
         app:use_controller="false"
         app:resize_mode="fit"
         app:surface_type="surface_view" />
 
-    <TextView
-        android:id="@+id/player_title"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingHorizontal="8dp"
-        android:paddingTop="8dp"
-        android:maxLines="2"
-        android:ellipsize="end"
-        android:textColor="@color/ff_text"
-        android:textSize="13sp" />
-
-    <TextView
-        android:id="@+id/player_subtitle"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingHorizontal="8dp"
-        android:maxLines="1"
-        android:ellipsize="end"
-        android:textColor="@color/ff_text_dim"
-        android:textSize="10sp" />
-
-    <Space
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1" />
-
+    <!-- Everything below here is transient. It is shown on any key press and
+         hidden again a few seconds later, so the steady state is bare video. -->
     <LinearLayout
+        android:id="@+id/player_chrome"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:paddingHorizontal="8dp">
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:background="#B0000000"
+        android:paddingHorizontal="6dp"
+        android:paddingTop="3dp"
+        android:paddingBottom="2dp">
 
         <TextView
-            android:id="@+id/player_position"
-            android:layout_width="0dp"
+            android:id="@+id/player_title"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:textColor="@color/ff_amber"
-            android:textSize="10sp" />
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textColor="@color/ff_text"
+            android:textSize="11sp" />
 
-        <TextView
-            android:id="@+id/player_duration"
-            android:layout_width="0dp"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:gravity="end"
-            android:textColor="@color/ff_text_dim"
-            android:textSize="10sp" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingTop="1dp">
+
+            <TextView
+                android:id="@+id/player_state"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/ff_amber"
+                android:textSize="10sp"
+                android:paddingEnd="4dp" />
+
+            <TextView
+                android:id="@+id/player_position"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/ff_amber"
+                android:textSize="10sp" />
+
+            <ProgressBar
+                android:id="@+id/player_progress"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="0dp"
+                android:layout_height="3dp"
+                android:layout_weight="1"
+                android:layout_marginHorizontal="5dp"
+                android:max="1000"
+                android:progressDrawable="@drawable/progress_amber" />
+
+            <TextView
+                android:id="@+id/player_duration"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/ff_text_dim"
+                android:textSize="10sp" />
+        </LinearLayout>
+
+        <!-- The player's own softkey labels, because the shell's band is hidden.
+             They sit here rather than in the shell so they fade with the rest of
+             the controls instead of pinning 22dp of the picture permanently. -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="2dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="start"
+                android:text="@string/soft_home"
+                android:textColor="@color/ff_text_dim"
+                android:textSize="9sp" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="end"
+                android:text="@string/soft_options"
+                android:textColor="@color/ff_text_dim"
+                android:textSize="9sp" />
+        </LinearLayout>
     </LinearLayout>
 
-    <ProgressBar
-        android:id="@+id/player_progress"
-        style="?android:attr/progressBarStyleHorizontal"
-        android:layout_width="match_parent"
-        android:layout_height="4dp"
-        android:layout_marginHorizontal="8dp"
-        android:layout_marginTop="2dp"
-        android:max="1000"
-        android:progressDrawable="@drawable/progress_amber" />
-
-    <!-- State, not buttons. Nothing here is touchable and pretending otherwise
-         on a device with no usable touchscreen would be a lie — this is a
-         readout of what OK will do next. -->
+    <!-- Kept so the browse screens can keep passing a subtitle, but never shown:
+         in landscape there is no room for a second text line, and the show name
+         is already in the title the user chose from. -->
     <TextView
-        android:id="@+id/player_state"
-        android:layout_width="match_parent"
+        android:id="@+id/player_subtitle"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:gravity="center"
-        android:paddingVertical="6dp"
-        android:textColor="@color/ff_text"
-        android:textSize="14sp" />
-</LinearLayout>
+        android:visibility="gone" />
+</FrameLayout>

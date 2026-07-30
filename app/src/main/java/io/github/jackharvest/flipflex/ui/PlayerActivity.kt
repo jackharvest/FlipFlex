@@ -3,7 +3,10 @@ package io.github.jackharvest.flipflex.ui
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
+import android.view.View
 import android.view.WindowManager
 import android.widget.ProgressBar
 import android.widget.TextView
@@ -57,6 +60,9 @@ class PlayerActivity : FlipActivity() {
 
         private const val SEEK_MS = 15_000L
 
+        /** How long the controls stay up after a key press. */
+        private const val CHROME_MS = 3_500L
+
         fun intent(
             ctx: Context,
             ratingKey: String,
@@ -75,6 +81,10 @@ class PlayerActivity : FlipActivity() {
     private lateinit var durationView: TextView
     private lateinit var progressView: ProgressBar
     private lateinit var stateView: TextView
+    private lateinit var chrome: View
+
+    /** Hides the overlay again after [CHROME_MS] of no key presses. */
+    private val chromeHider = Handler(Looper.getMainLooper())
 
     private var player: ExoPlayer? = null
     private var ticker: Job? = null
@@ -101,14 +111,17 @@ class PlayerActivity : FlipActivity() {
         durationView = body.findViewById(R.id.player_duration)
         progressView = body.findViewById(R.id.player_progress)
         stateView = body.findViewById(R.id.player_state)
+        chrome = body.findViewById(R.id.player_chrome)
 
         body.findViewById<TextView>(R.id.player_title).text =
             intent.getStringExtra(EXTRA_TITLE).orEmpty()
         body.findViewById<TextView>(R.id.player_subtitle).text =
             intent.getStringExtra(EXTRA_SUBTITLE).orEmpty()
 
-        setHeader("Now Playing")
-        setSoftKeys(left = getString(R.string.soft_home), right = getString(R.string.soft_options))
+        // Status bar, header and softkey bar all go. See setImmersive: they are
+        // 72 of the 240 rows this screen has, and the picture is the point.
+        // The chrome overlay in this layout replaces them, transiently.
+        setImmersive()
 
         // Without this the panel blanks mid-episode on the stock timeout, and
         // on a device where the lid is the real screen control that reads as a
@@ -130,6 +143,10 @@ class PlayerActivity : FlipActivity() {
         stateView.text = getString(R.string.msg_loading)
 
         lifecycleScope.launch {
+            closeOutPreviousPlayback(u, t)
+            store.lastSession = session
+            store.lastRatingKey = ratingKey
+
             // Preflight before handing the screen over. Plex answers a bare 400
             // when its transcoder is briefly wedged and recovers within a few
             // seconds; without this the user sees a black rectangle and a bounce
@@ -143,6 +160,35 @@ class PlayerActivity : FlipActivity() {
             sessionStarted = true
             attachPlayer(url)
         }
+    }
+
+    /**
+     * Close out a playback the app never finished, before starting a new one.
+     *
+     * `onDestroy` does this on the clean path, but it does not run when the
+     * process is killed -- a crash, a force-stop, or `adb install -r` over a
+     * running build. What is left behind is worse than an orphaned transcode:
+     * **Plex refuses a new transcode for any item it believes still has a live
+     * session, and that refusal is item-scoped, not client-scoped.** Measured
+     * against 1.43.2 -- with a stale session on one ratingKey, a request from a
+     * completely different client identifier was refused with the same bare 400,
+     * while a different item from our own client succeeded. A `state=stopped`
+     * timeline cleared it immediately.
+     *
+     * So this sends the timeline first; the transcode stop is the cheap part.
+     * The position comes from the store rather than being zeroed, because
+     * `stopped` with `time=0` would wipe the user's resume point and turn a
+     * crash into lost progress.
+     */
+    private suspend fun closeOutPreviousPlayback(u: String, t: String) {
+        val staleKey = store.lastRatingKey ?: return
+        Log.i(TAG, "closing out unfinished playback of $staleKey")
+        PlexPlayback.timeline(
+            u, t, staleKey, "stopped",
+            store.lastPositionMs, store.lastDurationMs,
+        )
+        store.lastSession?.let { if (it != session) PlexPlayback.stop(u, t, it) }
+        store.clearLastPlayback()
     }
 
     private fun attachPlayer(url: String) {
@@ -225,7 +271,15 @@ class PlayerActivity : FlipActivity() {
         positionView.text = clock(pos)
         durationView.text = if (dur > 0) clock(dur) else ""
         progressView.progress = if (dur > 0) ((pos.toFloat() / dur) * 1000).toInt() else 0
-        stateView.text = if (p.isPlaying) "❚❚  Pause" else "▶  Play"
+        // A glyph, not a label: the landscape transport line has room for the
+        // times and the bar, and "Pause"/"Play" spelled out pushes the duration
+        // off the right edge on a 320dp row.
+        stateView.text = if (p.isPlaying) "❚❚" else "▶"
+
+        // Paused keeps the overlay up; playing lets it fade. A frozen frame with
+        // no controls looks like the app has died, and that is precisely what
+        // the user sees every time they reopen the lid.
+        if (!p.isPlaying && chrome.visibility != View.VISIBLE) showChrome(sticky = true)
     }
 
     private fun clock(ms: Long): String {
@@ -241,8 +295,35 @@ class PlayerActivity : FlipActivity() {
         val u = uri ?: return
         val t = token ?: return
         val dur = player?.duration?.takeIf { it != C.TIME_UNSET } ?: 0L
+
+        // Mirrored locally on every report. If the process is killed before the
+        // next one, this is the position closeOutPreviousPlayback will send --
+        // without it the recovery report would have to guess, and guessing zero
+        // wipes the resume point.
+        store.lastPositionMs = positionMs
+        store.lastDurationMs = dur
+
         lifecycleScope.launch {
             PlexPlayback.timeline(u, t, ratingKey, state, positionMs, dur)
+        }
+    }
+
+    // ---- the transient overlay ---------------------------------------------
+
+    /**
+     * Show the controls, and arm their disappearance.
+     *
+     * Called on every key press, so any interaction brings the overlay back --
+     * which is the only way it can be brought back, there being no touchscreen
+     * to tap. While paused it is left up permanently: a paused player showing
+     * nothing but a frozen frame is indistinguishable from a crashed one, and
+     * that is exactly the state the phone is in every time the lid is opened.
+     */
+    private fun showChrome(sticky: Boolean = false) {
+        chrome.visibility = View.VISIBLE
+        chromeHider.removeCallbacksAndMessages(null)
+        if (!sticky) {
+            chromeHider.postDelayed({ chrome.visibility = View.GONE }, CHROME_MS)
         }
     }
 
@@ -259,6 +340,10 @@ class PlayerActivity : FlipActivity() {
     )
 
     override fun onAction(action: Action, keyCode: Int): Boolean {
+        // Any key wakes the overlay, whether or not we go on to use the key.
+        // Without this the only way to check where you are in an episode would
+        // be to press something that changes playback.
+        showChrome()
         val p = player ?: return false
         return when (action) {
             Action.SELECT -> {
@@ -271,10 +356,24 @@ class PlayerActivity : FlipActivity() {
                 }
                 true
             }
-            Action.LEFT -> { p.seekTo((p.currentPosition - SEEK_MS).coerceAtLeast(0)); true }
-            Action.RIGHT -> { p.seekTo(p.currentPosition + SEEK_MS); true }
-            // Up/down are free here. Left unbound rather than mapped to volume,
-            // which the hardware volume rocker already does properly.
+            // Both axes seek, and that is because of the rotation.
+            //
+            // This screen is pinned to landscape, so the user physically turns
+            // the handset -- and the D-pad turns with it. At ROTATION_90 the
+            // key printed "up" now points at the left of the picture, so a
+            // strict LEFT/RIGHT binding would have people pressing a key that
+            // points backwards and getting nothing. Accepting UP and LEFT as
+            // "back", DOWN and RIGHT as "forward", means whichever way the phone
+            // is held, the key pointing at the start of the film seeks towards
+            // it. Nothing is lost: up and down have no other job here.
+            Action.LEFT, Action.UP -> {
+                p.seekTo((p.currentPosition - SEEK_MS).coerceAtLeast(0))
+                true
+            }
+            Action.RIGHT, Action.DOWN -> {
+                p.seekTo(p.currentPosition + SEEK_MS)
+                true
+            }
             else -> false
         }
     }
@@ -299,6 +398,7 @@ class PlayerActivity : FlipActivity() {
 
     override fun onDestroy() {
         ticker?.cancel()
+        chromeHider.removeCallbacksAndMessages(null)
         val p = player
         val position = p?.currentPosition ?: 0L
         val dur = p?.duration?.takeIf { it != C.TIME_UNSET } ?: 0L
@@ -318,6 +418,10 @@ class PlayerActivity : FlipActivity() {
                 PlexPlayback.timeline(u, t, ratingKey, "stopped", position, dur)
                 if (sessionStarted) PlexPlayback.stop(u, t, session)
             }
+            // Cleared only on the clean path. If we never get here -- killed
+            // process -- the record survives in prefs and the next startPlayback
+            // closes it out, which is the whole point of storing it.
+            store.clearLastPlayback()
         }
         super.onDestroy()
     }
