@@ -64,6 +64,9 @@ abstract class FlipActivity : AppCompatActivity() {
     private var optionIndex = 0
     private val optionsOpen: Boolean get() = optionsScrim.visibility == View.VISIBLE
 
+    /** Set by [showTransientMessage]; the next key press takes the message down. */
+    private var messageIsTransient = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         store = Store(this)
@@ -156,6 +159,21 @@ abstract class FlipActivity : AppCompatActivity() {
     protected fun showMessage(text: String?) {
         contentMessage.text = text.orEmpty()
         contentMessage.visibility = if (text == null) View.GONE else View.VISIBLE
+        messageIsTransient = false
+    }
+
+    /**
+     * A message that gets out of the way by itself, on the next key press.
+     *
+     * The message view covers the whole content frame, which is right for "no
+     * server" and wrong for "that shuffle found nothing" -- the second one is a
+     * remark about an action, and leaving it parked over a perfectly good list
+     * until something happens to reload it makes the app look broken instead of
+     * the action having failed.
+     */
+    protected fun showTransientMessage(text: String) {
+        showMessage(text)
+        messageIsTransient = true
     }
 
     // ---- navigation --------------------------------------------------------
@@ -189,21 +207,43 @@ abstract class FlipActivity : AppCompatActivity() {
     /** The line above the options, normally the focused item's title. */
     protected open fun optionsHeading(): String = ""
 
-    private fun openOptions() {
-        options = optionsFor()
-        if (options.isEmpty()) return
+    private fun openOptions() = showPanel(optionsHeading(), optionsFor())
 
+    private fun showPanel(heading: String, entries: List<Option>) {
+        if (entries.isEmpty()) return
+        options = entries
         optionIndex = 0
-        optionsTitle.text = optionsHeading()
+        optionsTitle.text = heading
         optionsList.removeAllViews()
         val inflater = LayoutInflater.from(this)
-        options.forEach { opt ->
+        entries.forEach { opt ->
             val tv = inflater.inflate(R.layout.row_option, optionsList, false) as TextView
             tv.text = opt.label
             optionsList.addView(tv)
         }
         optionsScrim.visibility = View.VISIBLE
         paintOptions()
+    }
+
+    /**
+     * "Are you sure", in the panel the Options key already opens.
+     *
+     * Not a Dialog, for the same reason the Options panel is not one: a Dialog
+     * on this build steals D-pad focus unpredictably, and losing the D-pad on a
+     * device with no touch input is unrecoverable. Reusing the panel also means
+     * the confirm is driven by exactly the keys the user just used to get here.
+     *
+     * Cancel is first, so it is what the cursor starts on -- the destructive row
+     * must never be the one an accidental OK press lands on.
+     */
+    protected fun confirm(heading: String, confirmLabel: String, onConfirm: () -> Unit) {
+        showPanel(
+            heading,
+            listOf(
+                Option("Cancel") {},
+                Option(confirmLabel, onConfirm),
+            ),
+        )
     }
 
     protected fun closeOptions() {
@@ -250,11 +290,27 @@ abstract class FlipActivity : AppCompatActivity() {
         // the ringer/media stream distinction wrong.
         if (KeyMap.passThrough(action)) return super.onKeyDown(keyCode, event)
 
+        // Announced before anything is decided, including the softkeys, which
+        // never reach onAction. The player needs *every* key it keeps to count
+        // as activity, because that is the only way its auto-hidden controls
+        // can be brought back -- there is no touchscreen to tap.
+        onKeyPressed(action)
+
+        // The key still does its normal job; it only also dismisses the remark.
+        if (messageIsTransient) showMessage(null)
+
         if (optionsOpen) {
-            when (action) {
-                Action.UP -> moveOption(-1)
-                Action.DOWN -> moveOption(+1)
-                Action.SELECT -> {
+            // The panel is a vertical list drawn on the screen, so it has to be
+            // driven by whichever key points down *the screen* -- which is not
+            // the key printed "down" once the player has turned the handset
+            // ninety degrees. Both are accepted: the printed key keeps working,
+            // and the one that points the right way starts working. No key ends
+            // up dead, and none of them moves the wrong way.
+            val dir = screenDirection(action)
+            when {
+                action == Action.UP || dir == Action.UP -> moveOption(-1)
+                action == Action.DOWN || dir == Action.DOWN -> moveOption(+1)
+                action == Action.SELECT -> {
                     val chosen = options.getOrNull(optionIndex)
                     closeOptions()
                     chosen?.run?.invoke()
@@ -262,8 +318,8 @@ abstract class FlipActivity : AppCompatActivity() {
                 // Both the back arrow and a second press of the right softkey
                 // dismiss it. Two ways out of a modal panel on a device with no
                 // touchscreen is insurance, not redundancy.
-                Action.BACK, Action.SOFT_RIGHT -> closeOptions()
-                Action.SOFT_LEFT -> { closeOptions(); goHome() }
+                action == Action.BACK || action == Action.SOFT_RIGHT -> closeOptions()
+                action == Action.SOFT_LEFT -> { closeOptions(); goHome() }
                 else -> Unit
             }
             return true
@@ -285,4 +341,23 @@ abstract class FlipActivity : AppCompatActivity() {
      * anything that does not simply returns false and gets the default.
      */
     protected open fun onAction(action: Action, keyCode: Int): Boolean = false
+
+    /**
+     * Any key this app keeps, before anything has decided what to do with it.
+     *
+     * Fires for the softkeys and for keys the Options panel is about to consume,
+     * neither of which reach [onAction]. Only the player uses it.
+     */
+    protected open fun onKeyPressed(action: Action?) {}
+
+    /**
+     * Where a D-pad key points *on this screen*, which stops being where it is
+     * printed as soon as a screen is rotated.
+     *
+     * Every screen but the player is portrait, so the identity mapping is right
+     * for all of them. The player overrides it, and only the Options panel
+     * consults it -- a screen that draws its own controls over a rotated video
+     * knows better than the shell does what its keys mean.
+     */
+    protected open fun screenDirection(action: Action?): Action? = action
 }

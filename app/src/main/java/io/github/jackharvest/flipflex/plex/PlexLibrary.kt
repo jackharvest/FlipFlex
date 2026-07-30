@@ -80,6 +80,109 @@ object PlexLibrary {
     )
 
     /**
+     * A window of any list the server has given us a path for.
+     *
+     * Categories hand back a ready-made path with a filter already on it -- for
+     * example `/library/sections/2/all?genre=42` -- and re-deriving that from
+     * its parts would mean parsing the query Plex just handed us. Paging it is
+     * identical to paging a section, so this feeds the same [Page].
+     */
+    suspend fun pathItems(
+        uri: String,
+        token: String,
+        path: String,
+        offset: Int = 0,
+        size: Int = PAGE,
+    ): Page {
+        // The path may or may not already carry a query. Getting this wrong
+        // produces a URL with two question marks, which Plex answers with the
+        // *unfiltered* library rather than an error -- so a genre browse would
+        // silently show everything.
+        val join = if (path.contains('?')) "&" else "?"
+        return page(
+            PlexClient.json(
+                "$uri$path${join}X-Plex-Container-Start=$offset&X-Plex-Container-Size=$size",
+                token,
+            ),
+            offset,
+        )
+    }
+
+    /** One way of slicing a library: a genre, a year, a content rating. */
+    data class Category(val title: String, val path: String, val count: Int)
+
+    /**
+     * The genres in a library, for the Categories view.
+     *
+     * Genre only, of the several facets Plex offers (year, decade, rating,
+     * collection, director). It is the one people browse by, and each extra
+     * facet is another row on a screen that shows seven of them -- a list of
+     * facets to choose a facet from is a level of navigation that buys nothing.
+     *
+     * `fastKey` is preferred over `key` because it is a complete path with the
+     * filter already applied. `key` is a bare id on some server versions and a
+     * path on others, and the bare id form gives no way to know which facet it
+     * belongs to.
+     */
+    suspend fun genres(uri: String, token: String, sectionKey: String): List<Category> {
+        val o = PlexClient.json("$uri/library/sections/$sectionKey/genre", token)
+        val arr = o?.optJSONObject("MediaContainer")?.optJSONArray("Directory") ?: return emptyList()
+        return (0 until arr.length()).mapNotNull { i ->
+            val d = arr.optJSONObject(i) ?: return@mapNotNull null
+            val title = d.str("title")
+            val fast = d.str("fastKey")
+            val raw = d.str("key")
+            val path = when {
+                fast.isNotEmpty() -> fast
+                raw.startsWith("/") -> raw
+                raw.isNotEmpty() -> "/library/sections/$sectionKey/all?genre=${PlexClient.enc(raw)}"
+                else -> ""
+            }
+            if (title.isEmpty() || path.isEmpty()) null
+            else Category(title, path, d.optInt("size", 0))
+        }
+    }
+
+    /**
+     * One random playable thing from a whole library. What Shuffle needs.
+     *
+     * Two requests, not one: the first asks for a single item purely to read the
+     * server's `totalSize`, and the second fetches one item at a random offset
+     * inside it. Fetching the library and picking from it would mean parsing
+     * several megabytes of JSON into a 128 MB heap to throw all but one row
+     * away.
+     *
+     * `sort=random` exists on newer servers and is not used, because it is a
+     * silent no-op on older ones -- which shuffles you to the first title
+     * alphabetically, every time, and looks exactly like a broken feature.
+     *
+     * `type=4` is what makes this work on television: it enumerates *episodes*
+     * across the whole section, so a shuffle is a random episode of a random
+     * show rather than a random show you would then have to pick an episode of.
+     */
+    suspend fun randomInSection(
+        uri: String,
+        token: String,
+        sectionKey: String,
+        sectionType: String,
+    ): PlexItem? {
+        val type = if (sectionType == "show") 4 else 1
+        val base = "$uri/library/sections/$sectionKey/all?type=$type"
+        val first = page(
+            PlexClient.json("$base&X-Plex-Container-Start=0&X-Plex-Container-Size=1", token),
+            0,
+        )
+        val total = first.totalSize
+        if (total <= 0) return null
+        val pick = (0 until total).random()
+        if (pick == 0) return first.items.firstOrNull()
+        return page(
+            PlexClient.json("$base&X-Plex-Container-Start=$pick&X-Plex-Container-Size=1", token),
+            pick,
+        ).items.firstOrNull()
+    }
+
+    /**
      * Where each letter starts, so a long library can be jumped rather than
      * scrolled.
      *

@@ -2,6 +2,7 @@ package io.github.jackharvest.flipflex.ui
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -63,6 +64,23 @@ class PlayerActivity : FlipActivity() {
         /** How long the controls stay up after a key press. */
         private const val CHROME_MS = 3_500L
 
+        /**
+         * The three ways this screen can be turned. Values of
+         * [io.github.jackharvest.flipflex.store.Store.playerOrientation].
+         *
+         * There are two landscapes and they are not interchangeable, because
+         * this handset's edges are not symmetric. `SCREEN_ORIENTATION_LANDSCAPE`
+         * puts the edge carrying the **power button and the headphone jack**
+         * along the bottom, so a plugged-in phone cannot be stood on a table --
+         * the cable is underneath it. Reverse landscape puts the edge with only
+         * the volume rocker down, which sits flat. So [ORIENT_LANDSCAPE_FLIPPED]
+         * is the default, and the other one is still offered because which way
+         * you hold it is a preference, not a fact.
+         */
+        const val ORIENT_PORTRAIT = "portrait"
+        const val ORIENT_LANDSCAPE = "landscape"
+        const val ORIENT_LANDSCAPE_FLIPPED = "landscape_flipped"
+
         fun intent(
             ctx: Context,
             ratingKey: String,
@@ -104,6 +122,10 @@ class PlayerActivity : FlipActivity() {
         ratingKey = intent.getStringExtra(EXTRA_KEY).orEmpty()
         startMs = intent.getLongExtra(EXTRA_START, 0L)
 
+        // Before the window is on screen, so the first frame is already the
+        // right way up rather than rotating under the user.
+        applyOrientation()
+
         val body = layoutInflater.inflate(R.layout.activity_player, null)
         setBody(body)
         playerView = body.findViewById(R.id.player_view)
@@ -129,6 +151,36 @@ class PlayerActivity : FlipActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         startPlayback()
+    }
+
+    // ---- rotation ----------------------------------------------------------
+
+    private fun orientation(): String = store.playerOrientation ?: ORIENT_LANDSCAPE_FLIPPED
+
+    /**
+     * Turn the screen, without losing the stream.
+     *
+     * `requestedOrientation` overrides the manifest, and the manifest declares
+     * `orientation|screenSize` in configChanges -- so this re-lays the views out
+     * in place instead of destroying and recreating the activity. That matters
+     * here more than anywhere else in the app: a recreate would tear down
+     * ExoPlayer, and tearing down a transcode mid-episode means preflighting a
+     * new one against a session the server still thinks is live.
+     */
+    private fun applyOrientation() {
+        requestedOrientation = when (orientation()) {
+            ORIENT_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            ORIENT_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            else -> ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE
+        }
+    }
+
+    private fun setOrientation(value: String) {
+        store.playerOrientation = value
+        applyOrientation()
+        // The new orientation is worth seeing labelled, and the user has just
+        // come out of a menu -- so re-arm rather than leaving the controls up.
+        showChrome()
     }
 
     private fun startPlayback() {
@@ -224,7 +276,19 @@ class PlayerActivity : FlipActivity() {
                 }
             }
 
-            override fun onIsPlayingChanged(isPlaying: Boolean) = paint()
+            /**
+             * The only place the controls are armed to disappear.
+             *
+             * Playback starting is what starts the countdown -- not the key
+             * press that asked for it, which happens seconds earlier while the
+             * server is still opening the transcode. Arming it there would fade
+             * the controls out during the buffering they exist to explain, and
+             * leave the user staring at a black rectangle.
+             */
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                paint()
+                showChrome(sticky = !isPlaying)
+            }
 
             override fun onPlayerError(error: PlaybackException) {
                 Log.w(TAG, "playback failed: ${error.errorCodeName}", error)
@@ -276,8 +340,9 @@ class PlayerActivity : FlipActivity() {
         // off the right edge on a 320dp row.
         stateView.text = if (p.isPlaying) "❚❚" else "▶"
 
-        // Paused keeps the overlay up; playing lets it fade. A frozen frame with
-        // no controls looks like the app has died, and that is precisely what
+        // Backstop for the same rule onIsPlayingChanged applies: never leave a
+        // stopped picture with no controls on it. A frozen frame and nothing
+        // else looks exactly like the app has died, and that is precisely what
         // the user sees every time they reopen the lid.
         if (!p.isPlaying && chrome.visibility != View.VISIBLE) showChrome(sticky = true)
     }
@@ -318,6 +383,11 @@ class PlayerActivity : FlipActivity() {
      * to tap. While paused it is left up permanently: a paused player showing
      * nothing but a frozen frame is indistinguishable from a crashed one, and
      * that is exactly the state the phone is in every time the lid is opened.
+     *
+     * `removeCallbacksAndMessages` runs on both paths on purpose. A sticky call
+     * has to *cancel* a pending hide, or the controls the pause just pinned up
+     * vanish a second later because a timer armed before the pause is still in
+     * flight.
      */
     private fun showChrome(sticky: Boolean = false) {
         chrome.visibility = View.VISIBLE
@@ -327,24 +397,53 @@ class PlayerActivity : FlipActivity() {
         }
     }
 
+    /**
+     * Any key at all wakes the controls, including the two softkeys, which are
+     * handled by the shell and never reach [onAction].
+     *
+     * Without this the only way to see where you are in an episode would be to
+     * press something that changes playback.
+     */
+    override fun onKeyPressed(action: Action?) {
+        // Anything that is not actively playing -- paused, buffering, or still
+        // waiting for the transcode -- keeps the controls up rather than
+        // arming a fade the user did not ask for.
+        showChrome(sticky = player?.isPlaying != true)
+    }
+
     // ---- keys --------------------------------------------------------------
 
     override fun optionsHeading(): String = intent.getStringExtra(EXTRA_TITLE).orEmpty()
 
-    override fun optionsFor(): List<Option> = listOf(
-        Option("Restart from beginning") {
-            player?.seekTo(0)
-            player?.play()
-        },
-        Option("Stop") { finish() },
-    )
+    override fun optionsFor(): List<Option> = buildList {
+        add(
+            Option("Restart from beginning") {
+                player?.seekTo(0)
+                player?.play()
+            }
+        )
+        // A tick rather than a separate "current orientation" line: the panel is
+        // the only place these three appear, so the marker has to carry the
+        // state as well as the choice.
+        fun rotate(value: String, label: String) {
+            add(Option(if (orientation() == value) "$label  ✓" else label) { setOrientation(value) })
+        }
+        // The labels do not track the constant names, deliberately. The
+        // constants are named for what Android calls them; the labels are named
+        // for what the user sees, and what they see is that one of these is the
+        // normal way to hold it and the other is the same thing upside down.
+        rotate(ORIENT_LANDSCAPE_FLIPPED, "Landscape")
+        rotate(ORIENT_LANDSCAPE, "Landscape, other way")
+        rotate(ORIENT_PORTRAIT, "Portrait")
+        add(Option("Stop") { finish() })
+    }
 
     override fun onAction(action: Action, keyCode: Int): Boolean {
-        // Any key wakes the overlay, whether or not we go on to use the key.
-        // Without this the only way to check where you are in an episode would
-        // be to press something that changes playback.
-        showChrome()
+        // The overlay is woken in onKeyPressed, which runs for every key the
+        // app keeps -- including the softkeys, which never arrive here.
         val p = player ?: return false
+        // Which way "up" points depends on which way the handset is being held.
+        val flipped = orientation() == ORIENT_LANDSCAPE_FLIPPED
         return when (action) {
             Action.SELECT -> {
                 if (p.isPlaying) {
@@ -358,24 +457,59 @@ class PlayerActivity : FlipActivity() {
             }
             // Both axes seek, and that is because of the rotation.
             //
-            // This screen is pinned to landscape, so the user physically turns
-            // the handset -- and the D-pad turns with it. At ROTATION_90 the
-            // key printed "up" now points at the left of the picture, so a
-            // strict LEFT/RIGHT binding would have people pressing a key that
-            // points backwards and getting nothing. Accepting UP and LEFT as
-            // "back", DOWN and RIGHT as "forward", means whichever way the phone
-            // is held, the key pointing at the start of the film seeks towards
-            // it. Nothing is lost: up and down have no other job here.
-            Action.LEFT, Action.UP -> {
-                p.seekTo((p.currentPosition - SEEK_MS).coerceAtLeast(0))
-                true
-            }
-            Action.RIGHT, Action.DOWN -> {
-                p.seekTo(p.currentPosition + SEEK_MS)
-                true
-            }
+            // The user physically turns the handset for this screen, and the
+            // D-pad turns with it. In landscape the key printed "up" no longer
+            // points up -- it points along the picture, so a strict LEFT/RIGHT
+            // binding would have people pressing a key aimed at the start of the
+            // film and getting nothing. Up and down have no other job here, so
+            // they seek too.
+            //
+            // Which way they seek has to follow the rotation, though. The two
+            // landscapes point the D-pad at opposite ends of the picture, so a
+            // fixed "up means back" is right in one of them and backwards in the
+            // other. LEFT and RIGHT keep their printed meaning in every case.
+            Action.LEFT -> { seek(-1, p); true }
+            Action.RIGHT -> { seek(+1, p); true }
+            Action.UP -> { seek(if (flipped) +1 else -1, p); true }
+            Action.DOWN -> { seek(if (flipped) -1 else +1, p); true }
             else -> false
         }
+    }
+
+    /**
+     * The D-pad, as the picture sees it.
+     *
+     * Measured on the handset: in plain landscape the panel is at ROTATION_90
+     * and the key printed "up" points at the left of the picture; reverse
+     * landscape is ROTATION_270 and it points at the right. So the key that
+     * moves *down* a list drawn over the video is LEFT in one and RIGHT in the
+     * other, and neither of them is the one with the arrow on it.
+     *
+     * Only the Options panel uses this. Seeking does its own thing, because
+     * there the question is which key points at the start of the film rather
+     * than which way a list runs.
+     */
+    override fun screenDirection(action: Action?): Action? = when (orientation()) {
+        ORIENT_PORTRAIT -> action
+        ORIENT_LANDSCAPE -> when (action) {
+            Action.RIGHT -> Action.UP
+            Action.LEFT -> Action.DOWN
+            Action.UP -> Action.LEFT
+            Action.DOWN -> Action.RIGHT
+            else -> action
+        }
+        else -> when (action) {
+            Action.LEFT -> Action.UP
+            Action.RIGHT -> Action.DOWN
+            Action.UP -> Action.RIGHT
+            Action.DOWN -> Action.LEFT
+            else -> action
+        }
+    }
+
+    /** [dir] is -1 for back, +1 for forward. */
+    private fun seek(dir: Int, p: ExoPlayer) {
+        p.seekTo((p.currentPosition + dir * SEEK_MS).coerceAtLeast(0))
     }
 
     // ---- lifecycle ---------------------------------------------------------

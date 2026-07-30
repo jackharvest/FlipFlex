@@ -73,6 +73,18 @@ class Store(context: Context) {
         }
     }
 
+    /**
+     * Which way the player screen is turned. See `PlayerActivity.ORIENT_*`.
+     *
+     * Null means "never chosen", and the player picks its own default -- the
+     * value is deliberately not defaulted here, because which of the two
+     * landscapes is the good one is a fact about the handset's edges rather
+     * than about storage.
+     */
+    var playerOrientation: String?
+        get() = prefs.getString(K_PLAYER_ORIENTATION, null)?.ifEmpty { null }
+        set(v) = prefs.edit().putString(K_PLAYER_ORIENTATION, v ?: "").apply()
+
     /** Base URI of the chosen server, e.g. `https://10-0-0-4.<hash>.plex.direct:32400`. */
     var serverUri: String?
         get() = prefs.getString(K_SERVER_URI, null)?.ifEmpty { null }
@@ -179,5 +191,6 @@ class Store(context: Context) {
         const val K_HOME_TOKEN = "home_token"
         const val K_PROFILE_NAME = "profile_name"
         const val K_HIDDEN_SECTIONS = "hidden_sections"
+        const val K_PLAYER_ORIENTATION = "player_orientation"
     }
 }

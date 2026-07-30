@@ -9,8 +9,10 @@
      FlipActivity.setImmersive) and the controls below are drawn *over* the
      video, on a scrim, and fade themselves out after a few seconds.
 
-     There is no layout-land variant because PlayerActivity is pinned to
-     landscape in the manifest and can never be in any other orientation. -->
+     There is no layout-land variant. The screen can be turned three ways from
+     the Options menu, but every one of them wants the same thing: video filling
+     the frame with the controls banded across the bottom. A portrait variant
+     would only restate this layout in a narrower box. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"

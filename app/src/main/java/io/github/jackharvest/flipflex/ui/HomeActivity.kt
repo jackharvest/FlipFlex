@@ -124,15 +124,50 @@ class HomeActivity : FlipActivity() {
         }
     }
 
+    /**
+     * Play one thing at random out of a whole library.
+     *
+     * Works the same for both kinds of library, which is the point:
+     * [PlexLibrary.randomInSection] enumerates *episodes* for television, so
+     * this is a random episode of a random show rather than a random show you
+     * would then have to pick an episode of. On a phone that gets opened for
+     * four minutes at a time, that distinction is the whole feature.
+     */
+    private fun shuffle(section: PlexItem) {
+        val u = store.serverUri ?: return
+        val t = store.serverToken ?: return
+        lifecycleScope.launch {
+            setBusy(true)
+            val item = PlexLibrary.randomInSection(u, t, section.sectionKey, section.type)
+            setBusy(false)
+            if (item == null) {
+                showTransientMessage("Nothing to shuffle in\n${section.title}.")
+                return@launch
+            }
+            startActivity(
+                PlayerActivity.intent(
+                    this@HomeActivity,
+                    ratingKey = item.ratingKey,
+                    title = item.title,
+                    subtitle = item.subtitle(),
+                    startMs = 0L,
+                )
+            )
+        }
+    }
+
     override fun optionsHeading(): String = list.selectedRow()?.title.orEmpty()
 
     override fun optionsFor(): List<Option> = buildList {
         val dest = list.selectedRow()?.payload
 
-        // Hiding is offered on the library that is focused, which is what makes
-        // it discoverable -- a "manage libraries" screen buried in Settings is
-        // not where anyone looks when a library is annoying them right now.
+        // Both of these are offered on the library that is focused, which is
+        // what makes them discoverable -- a "manage libraries" screen buried in
+        // Settings is not where anyone looks when a library is annoying them
+        // right now, and a shuffle you have to open a library to reach is one
+        // press worse than it needs to be.
         if (dest is Dest.Section) {
+            add(Option("Shuffle ${dest.item.title}") { shuffle(dest.item) })
             add(
                 Option("Hide ${dest.item.title}") {
                     store.toggleSectionHidden(dest.item.sectionKey)

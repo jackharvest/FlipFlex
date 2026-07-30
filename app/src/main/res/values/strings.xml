@@ -15,6 +15,12 @@
     <string name="home_recent">Recently Added</string>
     <string name="home_settings">Settings</string>
 
+    <!-- The three library views, as Plex names them. Kept short: three of them
+         share a 240dp row, so ~13 characters each is the whole budget. -->
+    <string name="tab_recommended">Recommended</string>
+    <string name="tab_library">Library</string>
+    <string name="tab_categories">Categories</string>
+
     <string name="msg_loading">Loading…</string>
     <string name="msg_empty">Nothing here.</string>
     <string name="msg_no_server">No Plex server reachable.\nCheck Wi-Fi, then press OK.</string>

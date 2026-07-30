@@ -49,6 +49,17 @@ class RowList(context: Context) : RecyclerView(context) {
          * the user never has to press past a row that does nothing.
          */
         val isHeader: Boolean = false,
+        /**
+         * A one-line row at about half height, for "more" affordances.
+         *
+         * The Recommended view shows three entries per group and then one of
+         * these. That shape only works if the button is genuinely cheap
+         * vertically -- a full-height row costs the same as a fourth result,
+         * which would defeat the point of capping the group in the first place.
+         *
+         * Unlike [isHeader] it is still selectable: it is a button.
+         */
+        val isThin: Boolean = false,
     )
 
     var rows: List<Row> = emptyList()
@@ -56,6 +67,22 @@ class RowList(context: Context) : RecyclerView(context) {
 
     var selected: Int = 0
         private set
+
+    /**
+     * True while some other control on the screen owns the cursor -- the letter
+     * rail, or the library view tabs.
+     *
+     * The selection bar is how this app shows where you are, so leaving it lit
+     * while the tab strip is also lit puts two cursors on a 240dp screen and
+     * makes it genuinely unclear which one OK is about to act on. Parked keeps
+     * the row marked, in a colour that is plainly not the live one.
+     */
+    var parked: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            adapter.notifyItemChanged(selected)
+        }
 
     /** Called on D-pad centre. */
     var onChoose: ((Int, Row) -> Unit)? = null
@@ -177,6 +204,10 @@ class RowList(context: Context) : RecyclerView(context) {
                 bindHeader(row)
                 return
             }
+            if (row.isThin) {
+                bindThin(row, isSelected)
+                return
+            }
             root.setPadding(dp(8), dp(4), dp(8), dp(4))
             title.textSize = 13f
             title.text = row.title
@@ -198,12 +229,13 @@ class RowList(context: Context) : RecyclerView(context) {
             }
 
             val ctx = itemView.context
-            root.setBackgroundColor(if (isSelected) ctx.getColor(R.color.ff_amber) else 0)
-            title.setTextColor(ctx.getColor(if (isSelected) R.color.ff_ground else R.color.ff_text))
+            val live = isSelected && !parked
+            root.setBackgroundColor(if (isSelected) ctx.getColor(selectionColor()) else 0)
+            title.setTextColor(ctx.getColor(if (live) R.color.ff_ground else R.color.ff_text))
             // The dim colours have to flip too. Amber-on-amber for the subtitle
             // was the first version and the selected row's second line simply
             // vanished.
-            val dim = ctx.getColor(if (isSelected) R.color.ff_ground else R.color.ff_text_dim)
+            val dim = ctx.getColor(if (live) R.color.ff_ground else R.color.ff_text_dim)
             subtitle.setTextColor(dim)
             trailing.setTextColor(dim)
             time.setTextColor(dim)
@@ -225,6 +257,30 @@ class RowList(context: Context) : RecyclerView(context) {
             secondLine.visibility = View.GONE
             progress.visibility = View.GONE
         }
+
+        /**
+         * The thin "more" button. Every field the full row sets has to be reset
+         * here, because these holders are recycled -- an unreset 13sp title or a
+         * leftover progress bar from a scrolled-past row would land in it.
+         */
+        private fun bindThin(row: Row, isSelected: Boolean) {
+            val ctx = itemView.context
+            root.setPadding(dp(8), dp(1), dp(8), dp(2))
+            title.text = row.title
+            title.textSize = 9f
+            subtitle.text = ""
+            trailing.text = ""
+            time.text = ""
+            secondLine.visibility = View.GONE
+            progress.visibility = View.GONE
+            root.setBackgroundColor(if (isSelected) ctx.getColor(selectionColor()) else 0)
+            title.setTextColor(
+                ctx.getColor(if (isSelected && !parked) R.color.ff_ground else R.color.ff_amber)
+            )
+        }
+
+        private fun selectionColor(): Int =
+            if (parked) R.color.ff_amber_parked else R.color.ff_amber
 
         private fun dp(v: Int): Int =
             (v * itemView.resources.displayMetrics.density).toInt()

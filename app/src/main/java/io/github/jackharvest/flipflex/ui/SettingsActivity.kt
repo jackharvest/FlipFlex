@@ -34,7 +34,6 @@ class SettingsActivity : FlipActivity() {
         const val MODE_PROFILE = "profile"
         const val MODE_SERVER = "server"
         const val MODE_LIBRARIES = "libraries"
-        const val MODE_SIGN_OUT = "signout"
 
         private const val EXTRA_MODE = "mode"
 
@@ -69,7 +68,6 @@ class SettingsActivity : FlipActivity() {
             MODE_PROFILE -> loadProfiles()
             MODE_SERVER -> loadServers()
             MODE_LIBRARIES -> loadLibraries()
-            MODE_SIGN_OUT -> loadSignOutConfirm()
         }
     }
 
@@ -97,7 +95,7 @@ class SettingsActivity : FlipActivity() {
                 RowList.Row(
                     title = "Sign out",
                     subtitle = "Unlinks this device",
-                    payload = Entry { startActivity(intent(this, MODE_SIGN_OUT)) },
+                    payload = Entry { askSignOut() },
                 ),
             )
         )
@@ -370,32 +368,29 @@ class SettingsActivity : FlipActivity() {
 
     // ---- sign out ----------------------------------------------------------
 
-    private fun loadSignOutConfirm() {
-        setHeader("Sign out")
-        list.submit(
-            listOf(
-                RowList.Row(
-                    title = "Cancel",
-                    subtitle = "Keep this device signed in",
-                    payload = Entry { finish() },
-                ),
-                RowList.Row(
-                    title = "Sign out",
-                    subtitle = "Requires plex.tv/link again",
-                    payload = Entry {
-                        store.signOut()
-                        startActivity(
-                            Intent(this, LinkActivity::class.java)
-                                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NEW_TASK)
-                        )
-                        finish()
-                    },
-                ),
+    /**
+     * Ask before unlinking, in a panel rather than on a screen of its own.
+     *
+     * The first version was a whole activity whose two rows were Cancel and
+     * Sign out. It asked, which was the point, but it looked exactly like every
+     * other settings list -- so it read as another level of navigation rather
+     * than as a question, and the answer to a question you did not notice being
+     * asked is whatever the cursor was already on.
+     *
+     * The confirm panel is unmistakably modal: it darkens the screen it is over
+     * and it has two entries. Recovering from a mistaken sign-out means finding
+     * a second device with a browser and typing a code into plex.tv/link, which
+     * is a long way to go for a mis-press on a phone with no touchscreen.
+     */
+    private fun askSignOut() {
+        confirm("Sign out of Plex?", "Sign out") {
+            store.signOut()
+            startActivity(
+                Intent(this, LinkActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NEW_TASK)
             )
-        )
-        // Cancel is deliberately the default selection. The destructive row
-        // should never be the one an accidental OK press lands on.
-        list.select(0)
+            finish()
+        }
     }
 
     // ---- keys --------------------------------------------------------------

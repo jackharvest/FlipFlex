@@ -174,11 +174,22 @@ softkey bar as `Back | Select`.
 | Back arrow | Up one level |
 | D-pad centre | Select |
 | D-pad ↑/↓ | Move selection |
-| D-pad ←/→ in a list | Page by about 7 rows |
+| D-pad ↑ at the top row | Step into the library view tabs, where ←/→ choose one |
+| D-pad ←/→ in a list | Page by about 7 rows, or step into the A-Z rail where there is one |
 | D-pad ←/→ in the player | Seek ∓15 s |
+| D-pad ↑/↓ in the player | Seek as well, in whichever direction the current rotation points them |
 | Volume rocker | Not consumed. The system's own handling is what users expect |
 | `CALL` | The one genuinely spare key. Unbound, but reserved — it must be caught in `dispatchKeyEvent` or the dialer takes it |
-| `*` `#`, digits | Arrive and are ours. Unbound so far |
+| `*` `#`, digits | Page up/down in a list; digits are the PIN pad. Otherwise unbound |
+
+**A rotated screen breaks the printed labels, and the code has to know.** The
+player can be turned three ways, and in either landscape the key printed "up"
+points along the picture rather than up it. Seeking handles this itself; for the
+Options panel, which is a vertical list drawn over the rotated video,
+`FlipActivity.screenDirection` maps a key to where it points *on screen*. The
+default is identity — every other screen is portrait — and only the player
+overrides it. The panel honours both the printed key and the mapped one, so no
+key is dead and none moves the wrong way.
 
 **Neither softkey is Back**, and that is the whole point. The back arrow is a
 real `KEYCODE_BACK` that reaches the app, so spending one of only two softkeys

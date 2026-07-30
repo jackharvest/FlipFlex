@@ -1,30 +1,103 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- A list, with an optional A-Z rail down the right edge.
+<!-- A list, with an optional view-tab strip above it and an optional A-Z rail
+     down the right edge.
+
+     The tabs are the same three Plex puts across the top of a library, and they
+     are here for the reason Plex has them: Recommended, Library and Categories
+     are three different answers to "what is in here", and without a permanent
+     marker there is nothing on screen that says which one you are looking at.
+     A list of titles and a list of genres look identical from across a room.
+
+     They are 13dp tall including the rule, which is about a third of a row. That
+     is the whole budget for knowing where you are, and it is paid once rather
+     than per row.
 
      The rail is the same idea as the letter strip in the Plex mobile app, and
      it exists for the same reason: a library of several hundred titles cannot be
      reached one D-pad press at a time. It is 15dp wide, which is as narrow as
      a legible 7sp letter goes and leaves the list its full 225dp.
 
-     Hidden entirely for lists where letters are meaningless, such as Continue
-     Watching or a season's episodes. -->
+     Both are hidden where they are meaningless: no tabs on Continue Watching or
+     inside a show, no rail on anything that is not sorted alphabetically. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="horizontal">
-
-    <FrameLayout
-        android:id="@+id/browse_list_holder"
-        android:layout_width="0dp"
-        android:layout_height="match_parent"
-        android:layout_weight="1" />
+    android:orientation="vertical">
 
     <LinearLayout
-        android:id="@+id/letter_rail"
-        android:layout_width="15dp"
-        android:layout_height="match_parent"
-        android:orientation="vertical"
-        android:gravity="center_horizontal"
-        android:background="@color/ff_surface"
+        android:id="@+id/browse_tabs"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:baselineAligned="false"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/browse_tab_0"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:paddingVertical="1dp"
+            android:text="@string/tab_recommended"
+            android:textColor="@color/ff_text_dim"
+            android:textSize="9sp" />
+
+        <TextView
+            android:id="@+id/browse_tab_1"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:paddingVertical="1dp"
+            android:text="@string/tab_library"
+            android:textColor="@color/ff_text_dim"
+            android:textSize="9sp" />
+
+        <TextView
+            android:id="@+id/browse_tab_2"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:paddingVertical="1dp"
+            android:text="@string/tab_categories"
+            android:textColor="@color/ff_text_dim"
+            android:textSize="9sp" />
+    </LinearLayout>
+
+    <View
+        android:id="@+id/browse_tabs_rule"
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/ff_rule"
         android:visibility="gone" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="horizontal">
+
+        <FrameLayout
+            android:id="@+id/browse_list_holder"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1" />
+
+        <LinearLayout
+            android:id="@+id/letter_rail"
+            android:layout_width="15dp"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:gravity="center_horizontal"
+            android:background="@color/ff_surface"
+            android:visibility="gone" />
+    </LinearLayout>
 </LinearLayout>
