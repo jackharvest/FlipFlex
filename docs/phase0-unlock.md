@@ -2,10 +2,15 @@
 
 **Live runbook. Update the status line after every step.**
 
-> **STATUS: at step 7, awaiting a go/no-go on the unlock.**
-> Nothing has ever been written to this device. Fastboot is reachable and
-> repeatable (three for three). The channel is healthy. `recovery2.img` is
-> downloaded and verified.
+> **STATUS: in fastboot, holding at `fastboot flashing unlock`.**
+> Nothing has ever been written to this device. Fastboot is four for four,
+> attempt 0 every time. `recovery2.img` is verified, the Magisk kit is staged
+> (6a), and everything readable before the wipe has been read — flags, the
+> by-name listing, and the keypad (`docs/keymap.md`).
+>
+> Once unlocked, go **straight to recovery** and never boot Android: recovery's
+> adb needs no RSA re-authorisation, so the dump can happen before the phone has
+> any chance to reach a network. Pull the SIM first.
 >
 > **The pre-unlock backup is now definitively impossible** -- see below. The
 > next action is the destructive one, and it needs Mike's word:
