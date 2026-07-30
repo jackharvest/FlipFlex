@@ -62,9 +62,14 @@ adb shell "su -c id" 2>&1 | head -1
 # Recovery has no /data worth using and / is read-only, but /dev is tmpfs and
 # always writable. Probe rather than assume -- recovery2.img is not TWRP and its
 # layout is not documented anywhere.
+# In recovery /data is not mounted, so /data/local/tmp does not exist, and adbd
+# runs as uid 2000 (shell) rather than root -- so the work directory has to be
+# both root-created and world-writable for adb push to reach it. /dev is tmpfs
+# and always present; the rest are probed because recovery2.img is not TWRP and
+# its layout is documented nowhere.
 WORK=""
-for cand in /dev/magisk-work /tmp/magisk-work /cache/magisk-work /data/local/tmp/magisk-work; do
-	if adb shell "su -c 'mkdir -p $cand && touch $cand/.w && echo ok'" 2>/dev/null | tr -d '\r' | grep -q ok; then
+for cand in /dev/magisk-work /tmp/magisk-work /cache/magisk-work; do
+	if adb shell "su -c 'mkdir -p $cand && chmod 777 $cand && touch $cand/.w && echo ok'" 2>/dev/null | tr -d '\r' | grep -q ok; then
 		WORK="$cand"
 		break
 	fi
@@ -73,17 +78,14 @@ done
 echo "==> working in $WORK"
 
 echo "==> pushing the patching kit"
-# push into /data/local/tmp first: adb push cannot write to root-only paths, so
-# we stage somewhere world-writable and then su-copy it across.
-adb shell "rm -rf /data/local/tmp/mgk && mkdir -p /data/local/tmp/mgk" >/dev/null
 for f in magiskboot magiskinit magisk magiskpolicy init-ld busybox boot_patch.sh util_functions.sh stub.apk; do
-	adb push "$KIT/$f" /data/local/tmp/mgk/ >/dev/null
+	adb push "$KIT/$f" "$WORK/" >/dev/null
 	printf '  %s\n' "$f"
 done
-adb push "$BOOT" /data/local/tmp/mgk/stock-boot.img >/dev/null
+adb push "$BOOT" "$WORK/stock-boot.img" >/dev/null
 echo "  stock-boot.img"
 
-adb shell "su -c 'cp -f /data/local/tmp/mgk/* $WORK/ && chmod 755 $WORK/*'" >/dev/null
+adb shell "su -c 'chmod 755 $WORK/*'" >/dev/null
 
 echo
 echo "==> running Magisk boot_patch.sh on the device"
@@ -95,7 +97,8 @@ echo "==> running Magisk boot_patch.sh on the device"
 #
 # persist is the preinit choice: it exists on this device (mmcblk0p4), it is not
 # touched by a factory reset, and it is not otapkg/cache which can be.
-adb shell "su -c 'cd $WORK && BOOTMODE=true PREINITDEVICE=persist $FLAGS sh ./boot_patch.sh stock-boot.img'" 2>&1 | tee /tmp/magisk-patch.log | sed 's/^/   /'
+LOG=$(dirname "$BOOT")/magisk-patch.log
+adb shell "su -c 'cd $WORK && BOOTMODE=true PREINITDEVICE=persist $FLAGS sh ./boot_patch.sh stock-boot.img'" 2>&1 | tee "$LOG" | sed 's/^/   /'
 
 adb shell "su -c 'ls -l $WORK/new-boot.img'" 2>&1 | tr -d '\r' | grep -q new-boot.img || {
 	echo "no new-boot.img was produced -- see the log above" >&2
@@ -115,10 +118,11 @@ adb shell "su -c 'cat $WORK/new-boot.img'" > "$OUT" 2>/dev/null || {
 # and this is the last moment it is cheap to find out.
 echo "==> verifying the injected /init is 32-bit ARM"
 adb shell "su -c 'cd $WORK && rm -rf v && mkdir v && cd v && ../magiskboot unpack ../new-boot.img && ../magiskboot cpio ramdisk.cpio \"extract init init\"'" >/dev/null 2>&1
-adb exec-out "su -c 'busybox stty raw; cat $WORK/v/init'" > /tmp/patched-init 2>/dev/null || true
+INIT=$(dirname "$BOOT")/patched-init.bin
+adb exec-out "su -c 'busybox stty raw; cat $WORK/v/init'" > "$INIT" 2>/dev/null || true
 
-if [ -s /tmp/patched-init ]; then
-	desc=$(file -b /tmp/patched-init)
+if [ -s "$INIT" ]; then
+	desc=$(file -b "$INIT")
 	echo "  injected /init: $desc"
 	case "$desc" in
 		*"ELF 32-bit"*ARM*) echo "  OK -- correct ABI for MT6739" ;;
@@ -132,6 +136,11 @@ echo
 ls -lh "$OUT"
 shasum -a 256 "$OUT"
 echo
-echo "Keep the stock image. To flash:"
-echo "  fastboot boot $OUT      # try it WITHOUT writing first -- LK supports this once unlocked"
+# fastboot boot is NOT an option on this LK -- it uploads, fails the handoff with
+# usb_read e00002ed, and boots Android instead. So this image cannot be tried
+# without being written, and the stock image below is the entire safety net.
+echo "Keep the stock image -- it is the only way back."
 echo "  fastboot flash boot $OUT"
+echo
+echo "If it bootloops: tools/bootseq.py FASTBOOT, then"
+echo "  fastboot flash boot $(dirname "$BOOT")/boot.img"
