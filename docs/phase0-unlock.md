@@ -2,9 +2,47 @@
 
 **Live runbook. Update the status line after every step.**
 
-> **STATUS: step 4 — ready to enter BROM and take the first backup.**
-> Nothing has been written to the device. Everything so far is read-only plus
-> two reversible Android settings changes.
+> **STATUS: step 4 blocked, step 7 is the decision point.**
+> Fastboot is reachable and repeatable via `tools/bootseq.py`. mtkclient cannot
+> talk to this preloader, so there is **no read path before unlocking** and the
+> backup we wanted first is not obtainable. Nothing has been written to the
+> device. Awaiting a call on whether to unlock without one.
+
+## How to get into fastboot (works, two for two, attempt 0 each time)
+
+```sh
+tools/bootseq.py FASTBOOT          # arm it FIRST, it waits
+# then: phone OFF, BATTERY IN, plug USB in, press nothing
+```
+
+**Battery in**, which is the opposite of the usual MTK advice. The preloader
+runs on USB power alone but fastboot does not — battery-out reached FASTBOOT,
+browned out, and went black before enumerating.
+
+### What the bootloader reports
+
+```
+product              gflip6
+unlocked             no
+secure               yes
+version-bootloader   gflip6-8535569-20220816183917-20241220171251
+version-baseband     MOLY.LR12A.R3.MP.V179.5.P53
+hw-revision          cc00
+max-download-size    0x8000000     (128 MB)
+partition-size:boot  0x1800000     (24 MB)
+slot-count           0             (A-only)
+battery-voltage      4285mV
+```
+
+### Do not probe LK with junk
+
+`fastboot boot <4KB of zeros>` wedged the bootloader's command channel —
+`fastboot devices` still listed it but every `getvar` hung, and it needed a
+battery pull. Nothing was written (`fastboot boot` never touches flash), but
+**whether `fastboot boot` is implemented is still unanswered** and must be
+tested with a real image, not a malformed one. That answer matters: if it
+works, a candidate boot image can be tried without writing it, and a wrong
+image costs a power cycle instead of a bootloop.
 
 ## Why this phase exists
 

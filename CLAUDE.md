@@ -78,9 +78,9 @@ The community answer is to flash `neutron.img` from `neutronscott/flip2`.
 - our build is **UPCI** on a 4058G, a combination that appears in *no* issue —
   their community is 4058W / T408DL on KEEZ/KEFS/KEKA/KEE7, and 4058E on QK6J
 
-Instead: dump **our own** stock boot with mtkclient in BROM mode (no root, no
-unlock, no ADB needed), patch that, flash it back. Same destination, no build
-mismatch to gamble on.
+Instead: dump **our own** stock boot, patch that, flash it back. Same
+destination, no build mismatch to gamble on. Getting at it turned out to be the
+hard part — see the mtkclient verdict below; the answer is `recovery2.img`.
 
 Then, rather than baking the property into the image the way `neutron.img`
 does, get plain Magisk root first and set the property separately —
@@ -91,6 +91,23 @@ compound failure.
 **`magiskboot` has no macOS build** — it ships only as Android ELF. Patch the
 dumped boot by loading it into an Android emulator and using the Magisk app's
 "Select and Patch a File", which needs no root, then `adb pull` the result.
+
+**mtkclient cannot attach to this phone, and that is settled.** BROM
+(`0e8d:0003`) never appears on the bus no matter which keys are held; only the
+preloader (`0e8d:2000`) does, for two to three seconds per power-up. mtkclient
+sees it and fails the handshake identically over libusb *and* `--serialport`,
+which points at TCL's preloader simply not implementing MediaTek's standard
+handshake — it speaks only its own 8-byte command protocol. That is why flip2
+built `autobooter` rather than using mtkclient, and it is why the read path has
+to be recovery-with-`su` instead, which in turn is why the unlock must come
+*before* the backup rather than after.
+
+**The read path is `recovery2.img`** — neutronscott's recovery with `su` and
+`busybox` baked in, from `http://scottn.us/downloads/recovery2.img` (**plain
+HTTP only; the host serves nothing over TLS**, so verify what you get:
+sha256 `394ad6bb38321565b121dec8c5dff098cd238919b766f9cbc0c994f4f0a376ac`,
+25,165,824 bytes, which is exactly `partition-size:boot`). `tools/dump-from-recovery.sh`
+drives it.
 
 ## Backups are not optional
 

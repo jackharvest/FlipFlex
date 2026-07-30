@@ -48,7 +48,11 @@ def find_port():
 
 
 print(f"sending {BOOTSEQ.decode()}, expecting {CONFIRM.decode()}")
-print(f"watching {PATTERN} -- connect the phone now (battery out is most reliable)")
+print(f"watching {PATTERN} -- phone OFF, BATTERY IN, plug in, press nothing")
+# Battery IN, despite that being the opposite of the usual MTK advice. The
+# preloader runs fine on USB power alone, but whatever it hands off to does
+# not: with the battery out this device reached FASTBOOT, browned out, and
+# went black before enumerating. The window appears identically either way.
 
 deadline = time.time() + 300
 spun = 0
