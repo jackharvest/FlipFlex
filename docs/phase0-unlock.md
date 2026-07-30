@@ -116,7 +116,7 @@ it can take ADB away permanently and there is no path back.
 redoing: the ADB RSA authorisation, the `*#*#33284#*#*` enablement, developer
 options, and the OEM-unlock toggle.
 
-## How to get into fastboot (works, three for three, attempt 0 each time)
+## How to get into fastboot (five for five, attempt 0 each time)
 
 ```sh
 tools/bootseq.py FASTBOOT          # arm it FIRST, it waits
@@ -127,12 +127,17 @@ tools/bootseq.py FASTBOOT          # arm it FIRST, it waits
 runs on USB power alone but fastboot does not — battery-out reached FASTBOOT,
 browned out, and went black before enumerating.
 
+**For recovery you do not need any of this.** `adb reboot recovery` works from
+Android, and `fastboot reboot recovery` works from fastboot. Only *fastboot
+itself* needs the battery ritual — `adb reboot bootloader` does NOT reach it,
+it just reboots Android.
+
 ### What the bootloader reports
 
 ```
 product              gflip6
-unlocked             no
-secure               yes
+unlocked             yes           (was: no, before step 7)
+secure               no            (was: yes)
 version-bootloader   gflip6-8535569-20220816183917-20241220171251
 version-baseband     MOLY.LR12A.R3.MP.V179.5.P53
 hw-revision          cc00
@@ -146,11 +151,12 @@ battery-voltage      4285mV
 
 `fastboot boot <4KB of zeros>` wedged the bootloader's command channel —
 `fastboot devices` still listed it but every `getvar` hung, and it needed a
-battery pull. Nothing was written (`fastboot boot` never touches flash), but
-**whether `fastboot boot` is implemented is still unanswered** and must be
-tested with a real image, not a malformed one. That answer matters: if it
-works, a candidate boot image can be tried without writing it, and a wrong
-image costs a power cycle instead of a bootloop.
+battery pull. Nothing was written (`fastboot boot` never touches flash).
+
+That question is settled now and the answer is above: `fastboot boot` does not
+work on this LK at all. The rule that survives is narrower — **a malformed image
+wedges LK's command channel**, while a valid one is refused cleanly. So never
+probe with junk; probe with a real image or not at all.
 
 ## Why this phase exists
 
