@@ -6,6 +6,7 @@ and is where all the Plex protocol knowledge came from.
 
 Read `docs/phase0-unlock.md` first — it is the live runbook and says exactly
 where we are. This file is the things that cost time to discover.
+`docs/keymap.md` has the keypad, read off the stock `.kl` files.
 
 ## The device, as measured (not as advertised)
 

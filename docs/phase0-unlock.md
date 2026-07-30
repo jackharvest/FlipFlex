@@ -199,10 +199,11 @@ keeping — see `CLAUDE.md` on why a 4058G `flash.bin` is worth having.
 1. `getprop ro.vendor.tct.endurance` reads true
 2. `adb install -r hello.apk` succeeds
 3. The app launches, and ideally appears in the Launcher3 drawer
-4. Every key gives a distinguishable keycode: D-pad ×4 + centre, **both
-   softkeys**, Back, `0`–`9`, `*`, `#` — the softkey codes are a genuine
-   unknown (AOSP `SOFT_LEFT/RIGHT` vs OEM `MENU`/`BACK`) and they decide
-   `KeyMap.kt`
+4. Every key gives a distinguishable keycode — **the mapping is now known**,
+   read off the stock `.kl` files pre-unlock into `docs/keymap.md`. The
+   softkeys are `SOFT_LEFT`/`SOFT_RIGHT`, so that unknown is closed. What is
+   still open is whether the app *receives* each one; log `onKeyDown` and press
+   everything once an APK installs
 5. `wm size` / `wm density` re-confirmed after the factory reset
 
 ## If it goes wrong
