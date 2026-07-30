@@ -150,6 +150,39 @@ framework consumes it for screen on/off and forwards nothing.
 `onPause()`/`onStop()` fire; that is where playback pauses and the position is
 posted to Plex. Guaranteed lifecycle, no privileged access.
 
-Reading `/dev/input/event3` as root would additionally let us tell a lid-close
+~~Reading `/dev/input/event3` as root would additionally let us tell a lid-close
 apart from any other backgrounding, and drive resume-on-open. That is a real
-option on this rooted handset, but it is an enhancement, not a dependency.
+option on this rooted handset, but it is an enhancement, not a dependency.~~
+**Retired, and not for technical reasons.** Resume-on-open is deliberately not a
+feature: a media app that starts making noise the moment the phone is opened is
+a liability in a meeting or a quiet room. Since pause-on-close falls out of the
+ordinary lifecycle, nothing needs `/dev/input` at all. Verified end to end in
+Phase 2 — see `phase2-playback.md`.
+
+---
+
+# What each key does in FlipFlex
+
+The measured table above says what the hardware delivers. This is what the app
+binds it to. **This supersedes the proof-of-concept art**, which drew the
+softkey bar as `Back | Select`.
+
+| Input | Action |
+|---|---|
+| **Left softkey** | **Home** — unwind to the start screen from any depth |
+| **Right softkey** | **Options** — context menu for the focused row |
+| Back arrow | Up one level |
+| D-pad centre | Select |
+| D-pad ↑/↓ | Move selection |
+| D-pad ←/→ in a list | Page by about 7 rows |
+| D-pad ←/→ in the player | Seek ∓15 s |
+| Volume rocker | Not consumed. The system's own handling is what users expect |
+| `CALL` | The one genuinely spare key. Unbound, but reserved — it must be caught in `dispatchKeyEvent` or the dialer takes it |
+| `*` `#`, digits | Arrive and are ours. Unbound so far |
+
+**Neither softkey is Back**, and that is the whole point. The back arrow is a
+real `KEYCODE_BACK` that reaches the app, so spending one of only two softkeys
+on it would waste half the input budget — and leave nothing for the per-item
+actions Plex puts behind its three-dot menu.
+
+`KeyMap.kt` is the code that implements this; `FlipActivity` routes it.

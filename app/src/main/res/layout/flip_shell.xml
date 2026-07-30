@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The frame every FlipFlex screen sits in. 240x320dp at density 160.
+
+     Three fixed bands: a header, the content, and the softkey bar. The bar is
+     not decoration — this handset has exactly two softkeys and no touchscreen
+     worth using, so the only way a user can know what they do is to label them
+     on screen, directly above the physical buttons. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/ff_ground">
+
+    <LinearLayout
+        android:id="@+id/header_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="6dp"
+        android:paddingVertical="5dp">
+
+        <TextView
+            android:id="@+id/header_chevron"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="‹"
+            android:textColor="@color/ff_text_dim"
+            android:textSize="15sp"
+            android:paddingEnd="5dp" />
+
+        <TextView
+            android:id="@+id/header_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textColor="@color/ff_text"
+            android:textSize="13sp" />
+
+        <!-- Spinner slot. A 240x320 screen has no room for a progress dialog,
+             and a blank list during a slow fetch is indistinguishable from an
+             empty library. -->
+        <TextView
+            android:id="@+id/header_busy"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/ff_amber"
+            android:textSize="11sp"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/ff_rule" />
+
+    <FrameLayout
+        android:id="@+id/content"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <!-- Empty/error text, centred. Shares the frame with whatever the
+             screen puts here. -->
+        <TextView
+            android:id="@+id/content_message"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:paddingHorizontal="16dp"
+            android:textColor="@color/ff_text_dim"
+            android:textSize="12sp"
+            android:visibility="gone" />
+
+        <!-- The Options panel, slid up over the content. It lives inside the
+             shell rather than in a Dialog because a Dialog on this build steals
+             D-pad focus in ways that are hard to predict, and losing the D-pad
+             on a device with no touch input is unrecoverable. -->
+        <FrameLayout
+            android:id="@+id/options_scrim"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#CC000000"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:id="@+id/options_panel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom"
+                android:orientation="vertical"
+                android:background="@color/ff_surface">
+
+                <TextView
+                    android:id="@+id/options_title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingHorizontal="8dp"
+                    android:paddingVertical="4dp"
+                    android:maxLines="1"
+                    android:ellipsize="end"
+                    android:textColor="@color/ff_text_dim"
+                    android:textSize="10sp" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="@color/ff_rule" />
+
+                <LinearLayout
+                    android:id="@+id/options_list"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+            </LinearLayout>
+        </FrameLayout>
+    </FrameLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/ff_rule" />
+
+    <!-- Left label sits over the left softkey, right over the right. The
+         hardware back arrow handles going up a level, which is why neither of
+         these says "Back" — spending one of only two softkeys on a function
+         that already has a dedicated physical button would waste half of them. -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingHorizontal="8dp"
+        android:paddingVertical="4dp">
+
+        <TextView
+            android:id="@+id/soft_left"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="start"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textColor="@color/ff_text"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/soft_right"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="end"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textColor="@color/ff_text"
+            android:textSize="11sp" />
+    </LinearLayout>
+</LinearLayout>

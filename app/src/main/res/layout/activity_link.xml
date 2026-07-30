@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Sign-in. The code is the largest text anywhere in the app on purpose: it is
+     read off a 2.4" screen and typed into a browser on another device, often at
+     arm's length, and getting a character wrong means waiting out the whole
+     poll cycle to find out. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:paddingHorizontal="10dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/link_go_to"
+        android:textColor="@color/ff_text_dim"
+        android:textSize="11sp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/link_url"
+        android:textColor="@color/ff_text"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:paddingBottom="14dp" />
+
+    <TextView
+        android:id="@+id/link_code"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:fontFamily="monospace"
+        android:letterSpacing="0.18"
+        android:textColor="@color/ff_amber"
+        android:textSize="34sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/link_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:paddingTop="14dp"
+        android:textColor="@color/ff_text_dim"
+        android:textSize="10sp" />
+</LinearLayout>

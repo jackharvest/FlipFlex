@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The logo is exactly 240x320, the panel's native size, and lives in
+     drawable-nodpi so aapt never rescales it. At density 160 a drawable-mdpi
+     copy would come out identical today, but nodpi says "these are pixels, not
+     a density-scaled asset" and survives someone changing the theme later. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/ff_ground">
+
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:src="@drawable/splash_logo"
+        android:scaleType="centerCrop"
+        android:contentDescription="@string/app_name" />
+
+    <TextView
+        android:id="@+id/splash_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:gravity="center"
+        android:paddingBottom="8dp"
+        android:textColor="@color/ff_text_dim"
+        android:textSize="10sp" />
+</FrameLayout>

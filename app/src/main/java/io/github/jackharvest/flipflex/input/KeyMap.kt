@@ -19,10 +19,18 @@ enum class Action {
     /** Activate the focused row. The physical OK in the middle of the D-pad. */
     SELECT,
 
-    /** Left softkey: always Back, matching the proof-of-concept art. */
+    /**
+     * Left softkey: Home, from any depth.
+     *
+     * Not Back, despite what the proof-of-concept art shows. That art was drawn
+     * before the Phase 1 probe established that the dedicated back arrow
+     * reaches an app as an ordinary KEYCODE_BACK -- and it does. With only two
+     * softkeys, spending one on a function that already has a physical button
+     * would waste half the budget.
+     */
     SOFT_LEFT,
 
-    /** Right softkey: contextual -- Select, Options, whatever the screen needs. */
+    /** Right softkey: Options -- the context menu for whatever is focused. */
     SOFT_RIGHT,
 
     /** The dedicated back arrow next to `*`. An ordinary KEYCODE_BACK. */

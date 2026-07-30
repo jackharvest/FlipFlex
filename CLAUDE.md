@@ -4,9 +4,14 @@ A text-only Plex client for a **TCL 4058G flip phone** (AOSP 11, 240×320).
 Sibling to `../OnionOS-PocketFlex`, which does the same job on a Miyoo Mini Plus
 and is where all the Plex protocol knowledge came from.
 
-Read `docs/phase0-unlock.md` first — it is the live runbook and says exactly
-where we are. This file is the things that cost time to discover.
-`docs/keymap.md` has the keypad, read off the stock `.kl` files.
+Read `docs/phase2-playback.md` first — it is the live runbook and says exactly
+where we are. `docs/phase0-unlock.md` is the closed unlock phase, kept because
+its recovery table still matters. This file is the things that cost time to
+discover. `docs/keymap.md` has the keypad as measured, plus what FlipFlex binds
+each key to.
+
+**Phase 2 is proven: sign in → find server → browse → transcode → play →
+report position → tear down, on the real handset against a real server.**
 
 The unlock work is also published, scrubbed of anything unit-specific, at
 **https://github.com/jackharvest/tcl-flip-macos-unlock** — tools plus a
@@ -39,6 +44,43 @@ Three of those killed risks that were in the original plan:
 - **32-bit only.** Nothing we ship needs native code (Media3's core is pure Java
   over MediaCodec), but it means an arm64 emulator is *not* ABI-faithful, and
   any future native dependency must ship `armeabi-v7a`.
+
+## App-layer traps, all of which failed silently or misleadingly
+
+**`optString` cannot be used on Plex JSON.** `JSONObject.optString(name,
+fallback)` returns the fallback only when the key is *absent*. For a key that is
+present and explicitly `null` it returns the **four-character string `"null"`**,
+because `JSONObject.NULL` is a sentinel object that `String.valueOf()` renders.
+Plex uses explicit nulls everywhere — `authToken` before you link, `accessToken`
+on a server you own, `grandparentRatingKey` on a movie. This stored `"null"` as
+the account token and walked past the sign-in screen entirely. `plex/Json.kt`
+exists for this; use `str()`/`strOrNull()` and grep for `optString` before
+merging.
+
+**Kotlin block comments nest.** A literal slash-star inside a KDoc — as in a
+path like `transcode/universal/<star>` — opens a nested comment that never
+closes. The error is `Missing '}'` on an unrelated line plus `Unclosed comment`
+at EOF, neither of which points at the path.
+
+**XML comments cannot contain `--`.** The prose dashes in every layout are em
+dashes because of this; it is a fatal `SAXParseException` at resource merge, not
+a warning. Kotlin comments are fine with `--` and still use it.
+
+**`./gradlew` alone fails on a fresh shell** — `Unable to locate a Java
+Runtime`. Homebrew's `openjdk@17` is keg-only, so `/usr/libexec/java_home`
+cannot see it. Use `tools/build.sh`, which sets `JAVA_HOME`.
+
+## What the SoC can decode
+
+Off `/vendor/etc/media_codecs_mediatek_video.xml`, not a spec sheet. Hardware
+decoders for **H.264, HEVC, VP9, MPEG2, MPEG4, VC1 and XVID, all capped at
+1600×960** — far more headroom than a 240-wide viewport needs. Encoders are
+AVC-only (MPEG4/H263 are locked to 176×144), which nothing here uses.
+
+So the SoC is not the playback constraint; the server's transcoder and the radio
+are. FlipFlex currently asks Plex for 320×240 at 800 kbps and forces a transcode
+so that one code path covers every file in the library. Direct play is the
+obvious next optimisation, not a necessity.
 
 ## Environment gotchas on this Mac
 

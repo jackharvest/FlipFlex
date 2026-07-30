@@ -50,4 +50,16 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+
+    // Media3's core is pure Java over MediaCodec, so it needs no .so and stays
+    // compatible with this 32-bit-only SoC. The HLS module is not optional:
+    // Plex's transcoder speaks /video/:/transcode/universal/start.m3u8, and
+    // without it ExoPlayer cannot parse a playlist at all.
+    implementation("androidx.media3:media3-exoplayer:1.3.1")
+    implementation("androidx.media3:media3-exoplayer-hls:1.3.1")
+    implementation("androidx.media3:media3-ui:1.3.1")
+
+    // No HTTP library. Android's HttpURLConnection is OkHttp underneath, and
+    // org.json ships in the platform -- on a handset with a 128 MB heap growth
+    // limit, a dependency we do not need is one we should not carry.
 }

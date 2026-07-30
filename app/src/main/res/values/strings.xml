@@ -1,4 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">FlipFlex</string>
+
+    <string name="link_go_to">On any browser, go to</string>
+    <string name="link_url">plex.tv/link</string>
+    <string name="link_waiting">Waiting for you to enter the code…</string>
+    <string name="link_failed">Could not reach plex.tv.\nPress OK to retry.</string>
+    <string name="link_expired">Code expired.\nPress OK for a new one.</string>
+
+    <string name="soft_home">Home</string>
+    <string name="soft_options">Options</string>
+
+    <string name="home_continue">Continue Watching</string>
+    <string name="home_recent">Recently Added</string>
+    <string name="home_settings">Settings</string>
+
+    <string name="msg_loading">Loading…</string>
+    <string name="msg_empty">Nothing here.</string>
+    <string name="msg_no_server">No Plex server reachable.\nCheck Wi-Fi, then press OK.</string>
+    <string name="msg_offline">Cannot reach Plex.\nPress OK to retry.</string>
 </resources>

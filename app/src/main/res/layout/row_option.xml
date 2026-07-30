@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One entry in the Options panel. Single line, because the panel slides up
+     over the content and every row it takes is a row of the list you were
+     looking at that you can no longer see. -->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/option_label"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:paddingHorizontal="8dp"
+    android:paddingVertical="6dp"
+    android:maxLines="1"
+    android:ellipsize="end"
+    android:textColor="@color/ff_text"
+    android:textSize="12sp" />

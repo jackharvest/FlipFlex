@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One list row, 240dp wide.
+
+     Selection is shown by a filled amber bar rather than an outline, because at
+     160dpi on a 2.4" panel a 1dp focus ring is genuinely hard to see across a
+     room-lit kitchen — which is where this phone gets used. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/row_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingHorizontal="8dp"
+    android:paddingVertical="4dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:baselineAligned="false">
+
+        <TextView
+            android:id="@+id/row_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textColor="@color/ff_text"
+            android:textSize="13sp" />
+
+        <!-- Item count for a library, or a watched tick. Never both. -->
+        <TextView
+            android:id="@+id/row_trailing"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingStart="6dp"
+            android:textColor="@color/ff_text_dim"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/row_second_line"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:baselineAligned="false">
+
+        <TextView
+            android:id="@+id/row_subtitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textColor="@color/ff_text_dim"
+            android:textSize="10sp" />
+
+        <TextView
+            android:id="@+id/row_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingStart="4dp"
+            android:textColor="@color/ff_text_dim"
+            android:textSize="10sp" />
+    </LinearLayout>
+
+    <!-- Resume progress. Shown only for part-watched items, so a fresh library
+         list is not a wall of empty grey bars. -->
+    <ProgressBar
+        android:id="@+id/row_progress"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="3dp"
+        android:layout_marginTop="3dp"
+        android:max="1000"
+        android:progressDrawable="@drawable/progress_amber"
+        android:visibility="gone" />
+</LinearLayout>

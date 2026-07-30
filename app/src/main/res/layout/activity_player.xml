@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Now Playing.
+
+     The video sits in a fixed band at the top rather than filling the screen. A
+     16:9 file on a 240-wide panel is 240x135, so "fullscreen" would be that same
+     picture with 90dp of black above and below it — the letterbox is
+     unavoidable, and putting the title and progress in it instead of black is
+     free. It also means the transport state is visible without an overlay that
+     has to be summoned and dismissed on a device with four spare keys. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/ff_ground">
+
+    <androidx.media3.ui.PlayerView
+        android:id="@+id/player_view"
+        android:layout_width="match_parent"
+        android:layout_height="150dp"
+        android:background="#FF000000"
+        app:use_controller="false"
+        app:resize_mode="fit"
+        app:surface_type="surface_view" />
+
+    <TextView
+        android:id="@+id/player_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="8dp"
+        android:paddingTop="8dp"
+        android:maxLines="2"
+        android:ellipsize="end"
+        android:textColor="@color/ff_text"
+        android:textSize="13sp" />
+
+    <TextView
+        android:id="@+id/player_subtitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="8dp"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:textColor="@color/ff_text_dim"
+        android:textSize="10sp" />
+
+    <Space
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingHorizontal="8dp">
+
+        <TextView
+            android:id="@+id/player_position"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="@color/ff_amber"
+            android:textSize="10sp" />
+
+        <TextView
+            android:id="@+id/player_duration"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="end"
+            android:textColor="@color/ff_text_dim"
+            android:textSize="10sp" />
+    </LinearLayout>
+
+    <ProgressBar
+        android:id="@+id/player_progress"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="4dp"
+        android:layout_marginHorizontal="8dp"
+        android:layout_marginTop="2dp"
+        android:max="1000"
+        android:progressDrawable="@drawable/progress_amber" />
+
+    <!-- State, not buttons. Nothing here is touchable and pretending otherwise
+         on a device with no usable touchscreen would be a lie — this is a
+         readout of what OK will do next. -->
+    <TextView
+        android:id="@+id/player_state"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:paddingVertical="6dp"
+        android:textColor="@color/ff_text"
+        android:textSize="14sp" />
+</LinearLayout>

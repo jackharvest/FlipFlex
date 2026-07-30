@@ -15,13 +15,17 @@
         android:icon="@drawable/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="false"
-        android:theme="@style/Theme.FlipFlex">
+        android:theme="@style/Theme.FlipFlex"
+        android:usesCleartextTraffic="true">
 
-        <!-- Phase 1 only. ProbeActivity is the launcher entry point until the
-             keycode pass in docs/keymap.md is filled in; SplashActivity replaces
-             it in Phase 3. -->
+        <!-- cleartext is permitted because a Plex server on the LAN is reached
+             over plain http whenever the phone's DNS cannot resolve the
+             *.plex.direct hostname the certificate is issued for. See
+             PlexServers.pick: without that fallback a perfectly good LAN server
+             is simply "not found". API calls still prefer https when it works. -->
+
         <activity
-            android:name=".probe.ProbeActivity"
+            android:name=".ui.SplashActivity"
             android:exported="true"
             android:screenOrientation="portrait"
             android:configChanges="keyboardHidden|orientation|screenSize">
@@ -30,5 +34,39 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".ui.LinkActivity"
+            android:screenOrientation="portrait"
+            android:configChanges="keyboardHidden|orientation|screenSize" />
+
+        <!-- singleTop so the Home softkey's CLEAR_TOP lands on the existing
+             instance rather than building a second one on top of the first. -->
+        <activity
+            android:name=".ui.HomeActivity"
+            android:launchMode="singleTop"
+            android:screenOrientation="portrait"
+            android:configChanges="keyboardHidden|orientation|screenSize" />
+
+        <activity
+            android:name=".ui.BrowseActivity"
+            android:screenOrientation="portrait"
+            android:configChanges="keyboardHidden|orientation|screenSize" />
+
+        <activity
+            android:name=".ui.PlayerActivity"
+            android:screenOrientation="portrait"
+            android:configChanges="keyboardHidden|orientation|screenSize" />
+
+        <!-- Kept, and no longer the launcher. This is the activity that measured
+             the keypad in Phase 1 and corrected the stock .kl files; it is worth
+             having when a future build or a replaced keypad needs re-measuring.
+             Launch it explicitly:
+               adb shell am start -n io.github.jackharvest.flipflex/.probe.ProbeActivity -->
+        <activity
+            android:name=".probe.ProbeActivity"
+            android:exported="true"
+            android:screenOrientation="portrait"
+            android:configChanges="keyboardHidden|orientation|screenSize" />
     </application>
 </manifest>
