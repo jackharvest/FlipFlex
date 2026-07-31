@@ -185,6 +185,20 @@ class SettingsActivity : FlipActivity() {
                     )
                 )
 
+                // Its own group, above the account rows. The tour is shown once
+                // on the first launch and then never again unless it is asked
+                // for, so this row is the only way back to it -- and someone
+                // looking for it is looking for help with the keypad, not for
+                // something filed under whichever account they signed in with.
+                add(RowList.Row(title = "HELP", isHeader = true))
+                add(
+                    RowList.Row(
+                        title = getString(R.string.tour_title),
+                        subtitle = getString(R.string.tour_settings_note),
+                        payload = Entry { startActivity(TourActivity.review(this@SettingsActivity)) },
+                    )
+                )
+
                 add(RowList.Row(title = "ACCOUNT", isHeader = true))
                 add(
                     RowList.Row(

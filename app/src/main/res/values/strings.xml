@@ -48,4 +48,15 @@
     <string name="pin_wrong">Wrong PIN. Try again.</string>
 
     <string name="msg_offline">Cannot reach Plex.\nPress OK to retry.</string>
+
+    <!-- The controls tour. The footer names the key that advances it, because
+         this is the one screen where the reader cannot be assumed to know. -->
+    <string name="tour_title">Controls</string>
+    <string name="tour_settings_note">The keypad, key by key</string>
+    <string name="tour_skip">Skip</string>
+    <string name="tour_skip_all">Skip the tour</string>
+    <string name="tour_next">Next</string>
+    <string name="tour_restart">Start again</string>
+    <string name="tour_footer">%1$d of %2$d · OK for the next one</string>
+    <string name="tour_footer_last">%1$d of %2$d · OK to finish</string>
 </resources>

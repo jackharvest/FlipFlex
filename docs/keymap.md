@@ -202,3 +202,36 @@ on it would waste half the input budget — and leave nothing for the per-item
 actions Plex puts behind its three-dot menu.
 
 `KeyMap.kt` is the code that implements this; `FlipActivity` routes it.
+
+## And the app teaches it, once
+
+None of the table above is guessable from looking at the handset, and three
+entries actively contradict what a decade of touchscreens has taught everyone:
+neither soft key is Back, the green call key is Search, and two of the keys on
+the top row leave the app entirely. So the first launch opens `TourActivity`
+before anything else — including before plex.tv/link, because the sign-in screen
+already has to be navigated with keys nobody has been told about.
+
+`PhoneDiagram` draws the handset on a canvas rather than shipping the reference
+artwork as a bitmap. The reason is arithmetic: an open flip phone is about one
+unit wide to three and a half tall, so scaled into a 240×246 content area the
+whole phone is seventy pixels across and the keypad is unreadable. Drawing it
+lets the upper shell be truncated instead of reproduced — the screen is not a
+control — and gives the keypad the height that would have gone to it. It also
+means a key can be lit, which on a bitmap would mean hardcoding pixel
+rectangles that are wrong at any other scale.
+
+Two things about it are worth not undoing:
+
+- **Only half the D-pad ring lights up.** Up/down and left/right are one piece
+  of plastic and two unrelated jobs, and lighting the whole ring for both draws
+  the identical picture twice. Two arcs say which axis is meant.
+- **The call and end keys are drawn green and red.** They are the only coloured
+  things in the diagram, and the step about search says "the green key" in so
+  many words.
+
+`Store.tourSeen` is set by `SplashActivity` on the way *in*, not by the tour on
+the way out. Marking it on completion means anything that goes wrong on that
+screen leaves a handset with no touchscreen showing a tutorial it cannot get
+past, with the app unreachable behind it. **Settings → Controls** reopens it for
+ever after, which is what makes marking it early cheap.

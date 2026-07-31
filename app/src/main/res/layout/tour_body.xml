@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The controls tour: a diagram that takes whatever height is left, and a
+     fixed band of prose under it.
+
+     The diagram has weight rather than a height, because the content area is
+     whatever the shell leaves after the header and the softkey bar and that
+     differs by a few pixels between screens. PhoneDiagram scales the handset to
+     fit whatever it is given, so the one thing that must not be a guess is how
+     much room the words below need. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/ff_ground">
+
+    <com.github.jackharvest.flipflex.ui.PhoneDiagram
+        android:id="@+id/tour_diagram"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/ff_rule" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="8dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="3dp">
+
+        <TextView
+            android:id="@+id/tour_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textColor="@color/ff_amber"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/tour_body"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:maxLines="4"
+            android:lineSpacingExtra="-1dp"
+            android:paddingTop="1dp"
+            android:textColor="@color/ff_text"
+            android:textSize="9.5sp" />
+
+        <!-- Where you are, and the one key that gets you to the next one. On a
+             screen whose whole subject is which key does what, saying so is
+             not redundancy. -->
+        <TextView
+            android:id="@+id/tour_footer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:maxLines="1"
+            android:paddingTop="2dp"
+            android:textColor="@color/ff_text_dim"
+            android:textSize="8sp" />
+    </LinearLayout>
+</LinearLayout>

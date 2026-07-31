@@ -27,4 +27,12 @@
     <color name="ff_badge_local">#FFA97BD6</color>
     <color name="ff_badge_subs">#FFD86A8C</color>
     <color name="ff_badge_text">#FF0B0B0B</color>
+
+    <!-- The two coloured keys, for the controls diagram only.
+         These are not UI colours and carry no meaning in the app: they are
+         what the plastic on the handset is. The tour calls one of them "the
+         green key" in so many words, and a diagram that draws it the same grey
+         as every other key makes the reader hunt for which one that is. -->
+    <color name="ff_key_call">#FF4FB866</color>
+    <color name="ff_key_end">#FFD1544F</color>
 </resources>

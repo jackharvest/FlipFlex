@@ -55,6 +55,13 @@
             android:screenOrientation="portrait"
             android:configChanges="keyboardHidden|orientation|screenSize" />
 
+        <!-- The controls tour. Shown once, ahead of whatever the first launch
+             was going to show, and reachable from Settings for ever after. -->
+        <activity
+            android:name=".ui.TourActivity"
+            android:screenOrientation="portrait"
+            android:configChanges="keyboardHidden|orientation|screenSize" />
+
         <activity
             android:name=".ui.BrowseActivity"
             android:screenOrientation="portrait"

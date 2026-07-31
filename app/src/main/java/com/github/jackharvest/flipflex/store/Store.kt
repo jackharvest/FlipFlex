@@ -107,6 +107,25 @@ class Store(context: Context) {
         get() = prefs.getString(K_PLAYER_ORIENTATION, null)?.ifEmpty { null }
         set(v) = prefs.edit().putString(K_PLAYER_ORIENTATION, v ?: "").apply()
 
+    /**
+     * Whether the controls tour has been offered yet.
+     *
+     * Set by [com.github.jackharvest.flipflex.ui.SplashActivity] at the moment
+     * it decides to show the tour, **not** when the tour is finished or skipped.
+     * That looks like the wrong end, and it is deliberate: marking it on
+     * completion means anything that goes wrong on that screen leaves a device
+     * with no touchscreen showing the same tour at every launch, with the app
+     * behind it unreachable. Marking it on entry costs a user who pulls the
+     * battery mid-tour one look at Settings, which is where it lives permanently
+     * anyway.
+     *
+     * Deliberately not cleared by [signOut]. Signing out is about an account;
+     * the keypad has not changed, and re-teaching it would be noise.
+     */
+    var tourSeen: Boolean
+        get() = prefs.getBoolean(K_TOUR_SEEN, false)
+        set(v) = prefs.edit().putBoolean(K_TOUR_SEEN, v).apply()
+
     // ---- playback settings -------------------------------------------------
 
     /**
@@ -318,5 +337,6 @@ class Store(context: Context) {
         const val K_DL_QUALITY = "dl_quality"
         const val K_DL_WIFI_ONLY = "dl_wifi_only"
         const val K_DL_DELETE_WATCHED = "dl_delete_watched"
+        const val K_TOUR_SEEN = "tour_seen"
     }
 }

@@ -73,6 +73,16 @@ downloads, badges, and the two playback failures:
 | Session reaped | Five minutes paused → `/status/sessions` shows FlipFlex playing with **no transcode session**; playback then ran on for minutes and died with `ERROR_CODE_IO_BAD_HTTP_STATUS` |
 | Surround | An 8-channel E-AC-3 source comes back **2-channel** on both paths already — no parameter needed |
 
+Round five, on the handset on 2026-07-31. The first-run controls tour:
+
+| Step | Evidence |
+|---|---|
+| First launch | With `tour_seen` absent, the splash hands off to the tour rather than to Home; OK on the last step lands on `HomeActivity` |
+| All eleven steps | Each lights its own control: ring arcs, OK, back arrow, either soft key with its own on-screen label, the green key, star and hash, the nine digits, favourites and mail, the hinge |
+| Two D-pad steps | Up/down lights the top and bottom arcs, left/right the sides — the two are not the same picture |
+| Key jumps | The green call key jumps to the search step and `0` to the PIN step, instead of opening search or doing nothing |
+| Reachable again | Settings → HELP → Controls, with the left soft key reading "Done" and Back returning to the settings list |
+
 ## The traps, in the order they cost time
 
 ### A downloaded file cannot be seeked, and the reason is a missing index
@@ -366,6 +376,14 @@ depending on what is focused.
 show shuffle were both called "Shuffle" and appeared together on the A-Z screen,
 one meaning this show and one meaning all six hundred of them. They are named
 after their scope now — "Shuffle TV Shows" against "Shuffle this show".
+
+**And none of it is discoverable, so the app teaches it once.** The first launch
+opens the controls tour ahead of whatever it was going to show — including ahead
+of plex.tv/link, which already has to be navigated with keys nobody has been
+told about. Eleven steps on a drawing of the handset, one control lit at a time
+with a leader line to its name. See `keymap.md` for why the drawing is a canvas
+and not the reference PNG, and why `Store.tourSeen` is set on the way in rather
+than on the way out.
 
 ## Pause on close, and deliberately no resume on open
 

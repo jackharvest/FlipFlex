@@ -29,11 +29,13 @@ import kotlinx.coroutines.launch
  */
 class SplashActivity : AppCompatActivity() {
 
+    private lateinit var store: Store
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_splash)
         val status = findViewById<TextView>(R.id.splash_status)
-        val store = Store(this)
+        store = Store(this)
         PlexClient.clientId = store.clientId
 
         // Before anything else, and deliberately before the network calls
@@ -97,8 +99,28 @@ class SplashActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Hand over to wherever this launch was headed -- through the controls tour,
+     * the first time.
+     *
+     * The tour is put in front of *every* destination rather than only in front
+     * of Home, and the sign-in screen is the reason. A first-time user's very
+     * first screen is plex.tv/link, which is already a screen you have to
+     * navigate with keys nobody has been told about yet; teaching the D-pad
+     * after that is teaching it too late.
+     *
+     * [Store.tourSeen] is set here, on the way in, not by the tour on the way
+     * out. See its comment: the failure mode of the other order is a device with
+     * no touchscreen stuck on a tutorial it cannot get past.
+     */
     private fun go(target: Class<*>) {
-        startActivity(Intent(this, target))
+        val next = Intent(this, target)
+        if (store.tourSeen) {
+            startActivity(next)
+        } else {
+            store.tourSeen = true
+            startActivity(TourActivity.firstRun(this, next))
+        }
         // finish() rather than letting it stack: the back arrow from Home
         // should leave the app, not redisplay a splash that immediately
         // forwards again.

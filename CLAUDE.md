@@ -9,7 +9,8 @@ where we are. `docs/phase0-unlock.md` is the closed unlock phase, kept because
 its recovery table still matters. `docs/launcher-menu.md` is how the app gets
 into the phone's Menu, which took a resource overlay and a package rename. This
 file is the things that cost time to discover. `docs/keymap.md` has the keypad
-as measured, plus what FlipFlex binds each key to.
+as measured, what FlipFlex binds each key to, and the first-run tour that
+teaches it.
 
 **Phase 2 is proven: sign in → find server → browse → transcode → play →
 report position → tear down, on the real handset against a real server.**
