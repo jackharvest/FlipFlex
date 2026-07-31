@@ -13,10 +13,10 @@
 
 ---
 
-The TCL 4058G is a $40 clamshell phone that TCL sells to people who want a phone
-that is only a phone. It has a 2.4-inch screen, 916 MB of RAM, a 32-bit MediaTek
-chip from 2016, and a keypad. It is not supposed to run apps at all — the vendor
-patched `PackageManagerService` so it refuses to install any.
+The TCL 4058G is the cheap clamshell you buy when you want a phone that is only
+a phone. A 2.4-inch screen, 916 MB of RAM, a 32-bit MediaTek chip from 2016, and
+a keypad. It is not supposed to run apps at all — TCL patched
+`PackageManagerService` so that it refuses to install any.
 
 FlipFlex is a Plex client for it. It signs in with `plex.tv/link`, finds your
 server, browses your libraries, asks the server to transcode down to 320×240,
@@ -27,7 +27,7 @@ play with both radios switched off.
 It works. Not as a demo — it is what one of these phones does on a train now.
 
 <p align="center">
-  <img src="docs/media/player.gif" width="400"><br>
+  <img src="docs/media/player.gif" width="360"><br>
   <sub>Seeking forward through an episode. Yes, that is the actual screen.</sub>
 </p>
 
@@ -71,13 +71,15 @@ first, come back here.
 
 ## Install
 
-1. Unlock the phone (above), so installs are allowed at all.
-2. Grab `flipflex-<version>.apk` from
-   [**Releases**](https://github.com/jackharvest/FlipFlex/releases/latest).
-3. ```sh
-   adb install flipflex-1.0.0.apk
-   ```
-4. Open it. It teaches you the keypad, then asks you to sign in.
+Unlock the phone first, so that installs are allowed at all. Then take
+`flipflex-<version>.apk` from
+[**Releases**](https://github.com/jackharvest/FlipFlex/releases/latest) and:
+
+```sh
+adb install flipflex-1.0.0.apk
+```
+
+Open it. It teaches you the keypad, then asks you to sign in.
 
 Updating later is just `adb install -r` over the top — the release APKs are all
 signed with the same key, so your login, your settings and your downloads stay
@@ -200,7 +202,7 @@ size setting because Plex's default of 100% is sized for a television.
 ### Playing
 
 <p align="center">
-  <img src="docs/media/play.gif" width="360">
+  <img src="docs/media/play.gif" width="320">
   <img src="docs/media/08-player-controls.png" width="320">
 </p>
 
