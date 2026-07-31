@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
+import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.lifecycle.lifecycleScope
 import com.github.jackharvest.flipflex.R
@@ -15,6 +16,7 @@ import com.github.jackharvest.flipflex.plex.PlexLibrary
 import com.github.jackharvest.flipflex.plex.PlexProfiles
 import com.github.jackharvest.flipflex.plex.PlexServers
 import com.github.jackharvest.flipflex.plex.Quality
+import com.github.jackharvest.flipflex.store.NetPolicy
 import kotlinx.coroutines.launch
 
 /**
@@ -37,6 +39,12 @@ class SettingsActivity : FlipActivity() {
         const val MODE_SERVER = "server"
         const val MODE_LIBRARIES = "libraries"
 
+        /** Index of each root tab in the strip, left to right. */
+        private const val TAB_PLAYBACK = 0
+        private const val TAB_DOWNLOADS = 1
+        private const val TAB_ACCOUNT = 2
+        private const val TAB_HELP = 3
+
         private const val EXTRA_MODE = "mode"
 
         fun intent(ctx: Context, mode: String = MODE_ROOT): Intent =
@@ -45,6 +53,10 @@ class SettingsActivity : FlipActivity() {
 
     private lateinit var list: RowList
     private lateinit var mode: String
+
+    /** The four groups, as tabs. Only [MODE_ROOT] has any. */
+    private var tabs: TabStrip? = null
+    private var tab = TAB_PLAYBACK
 
     /** Non-null while the PIN pad is up, which routes keys away from the list. */
     private var pinView: View? = null
@@ -58,7 +70,29 @@ class SettingsActivity : FlipActivity() {
         super.onCreate(savedInstanceState)
         mode = intent.getStringExtra(EXTRA_MODE) ?: MODE_ROOT
         list = RowList(this)
-        setBody(list)
+
+        // Only the root is tabbed. The sub-screens are one list each -- a
+        // profile list, a server list -- and a strip above them would be three
+        // tabs offering to leave a screen you arrived at one press ago.
+        if (mode == MODE_ROOT) {
+            val body = layoutInflater.inflate(R.layout.tabbed_body, null)
+            setBody(body)
+            body.findViewById<FrameLayout>(R.id.body_list_holder).addView(list)
+            tabs = body.findViewById<TabStrip>(R.id.body_tabs).apply {
+                setTabs(
+                    listOf(
+                        getString(R.string.settings_tab_playback),
+                        getString(R.string.settings_tab_downloads),
+                        getString(R.string.settings_tab_account),
+                        getString(R.string.settings_tab_help),
+                    )
+                )
+                setActive(tab)
+            }
+        } else {
+            setBody(list)
+        }
+
         setSoftKeys(left = getString(R.string.soft_home), right = null)
         list.onChoose = { _, row -> (row.payload as? Entry)?.run?.invoke() }
         load()
@@ -76,13 +110,31 @@ class SettingsActivity : FlipActivity() {
     // ---- root --------------------------------------------------------------
 
     /**
-     * The whole settings list, grouped.
+     * The settings for whichever tab is showing.
      *
-     * Playback first, because those are the ones anyone actually changes --
-     * this screen used to be four rows about accounts, and the settings people
-     * wanted (subtitles, quality) did not exist anywhere. The captions matter
-     * more than they look: at fifteen rows on a screen that shows seven, an
-     * ungrouped list is one people scroll past rather than read.
+     * ## Why this is four short lists and not one grouped one
+     *
+     * It was one list of fifteen rows with four captions in it, and the captions
+     * were doing two jobs badly. As labels they were fine; as *rows* they were
+     * the things the cursor had to skip over, and skipping one is what put the
+     * amber bar off the bottom of the screen -- see [RowList.scrollToCursor] for
+     * the mechanism. Even with that fixed, reaching "Sign out" was two pages of
+     * scrolling past settings nobody was looking for.
+     *
+     * The same four groups as tabs cost one 13dp strip, which is paid once
+     * rather than four times, and every list is now shorter than the screen. The
+     * number keys reach a tab directly, which makes the deepest row in Settings
+     * two presses from arriving instead of nine.
+     *
+     * ## Why the values are coloured
+     *
+     * The same four colours the details page uses, meaning the same four things:
+     * blue is what the file already is, green is what will reach the screen,
+     * violet is storage on the phone, rose is subtitles. Someone who has picked
+     * a subtitle track on a details page has seen rose next to that decision;
+     * finding the global default in the same colour is what says the two are the
+     * same setting. Without it they are two unrelated rows that happen to share
+     * a word.
      *
      * Every toggle acts in place and redraws, rather than opening a screen of
      * its own. A settings row whose value is on the row and changes when you
@@ -91,146 +143,235 @@ class SettingsActivity : FlipActivity() {
      */
     private fun loadRoot() {
         setHeader("Settings")
-        val q = Quality.byId(store.quality)
-        val dq = Quality.byId(store.downloadQuality)
+        tabs?.setActive(tab)
         list.submit(
-            buildList {
-                add(RowList.Row(title = "PLAYBACK", isHeader = true))
-                add(
-                    RowList.Row(
-                        title = "Quality",
-                        subtitle = q.summary,
-                        trailing = q.label,
-                        payload = Entry { cycleQuality() },
-                    )
-                )
-                add(
-                    RowList.Row(
-                        title = "Subtitles",
-                        subtitle = "Burned in by the server",
-                        trailing = if (store.subtitles) "On" else "Off",
-                        payload = Entry { store.subtitles = !store.subtitles; loadRoot() },
-                    )
-                )
-                add(
-                    RowList.Row(
-                        title = "Subtitle size",
-                        subtitle = "Plex's 100 is sized for a TV",
-                        trailing = "${store.subtitleSize}%",
-                        payload = Entry { cycleSubtitleSize() },
-                    )
-                )
-                // An experiment, not a feature, and labelled as one. The obvious
-                // suspect for a stream that dies partway through a busy evening
-                // is the server's transcoder, and this is the only way to take
-                // the transcoder out of the path and see whether the failures
-                // stop. It will not work on everything -- the MT6739 decodes
-                // HEVC only to 1600x960, so a 1080p HEVC source is above what
-                // the chip accepts -- which is exactly why it is off by default
-                // and why the subtitle says what it is for.
-                add(
-                    RowList.Row(
-                        title = "Try direct play",
-                        subtitle = "Skips the server's transcoder",
-                        trailing = if (store.directPlay) "On" else "Off",
-                        payload = Entry { store.directPlay = !store.directPlay; loadRoot() },
-                    )
-                )
-                add(
-                    RowList.Row(
-                        title = "Details before playing",
-                        subtitle = "Description, tracks, download",
-                        trailing = if (store.showDetails) "On" else "Off",
-                        payload = Entry { store.showDetails = !store.showDetails; loadRoot() },
-                    )
-                )
-
-                add(RowList.Row(title = "DOWNLOADS", isHeader = true))
-                add(
-                    RowList.Row(
-                        title = "Downloads",
-                        subtitle = downloadSummary(),
-                        trailing = Downloads.count(this@SettingsActivity).toString(),
-                        payload = Entry { startActivity(DownloadsActivity.intent(this@SettingsActivity)) },
-                    )
-                )
-                add(
-                    RowList.Row(
-                        title = "Download quality",
-                        subtitle = dq.summary,
-                        trailing = dq.label,
-                        payload = Entry { cycleDownloadQuality() },
-                    )
-                )
-                add(
-                    RowList.Row(
-                        title = "Wi-Fi only",
-                        subtitle = "Never download on mobile data",
-                        trailing = if (store.downloadWifiOnly) "On" else "Off",
-                        payload = Entry {
-                            store.downloadWifiOnly = !store.downloadWifiOnly
-                            loadRoot()
-                        },
-                    )
-                )
-                add(
-                    RowList.Row(
-                        title = "Delete once watched",
-                        subtitle = "When an episode reaches the end",
-                        trailing = if (store.downloadDeleteWatched) "On" else "Off",
-                        payload = Entry {
-                            store.downloadDeleteWatched = !store.downloadDeleteWatched
-                            loadRoot()
-                        },
-                    )
-                )
-
-                // Its own group, above the account rows. The tour is shown once
-                // on the first launch and then never again unless it is asked
-                // for, so this row is the only way back to it -- and someone
-                // looking for it is looking for help with the keypad, not for
-                // something filed under whichever account they signed in with.
-                add(RowList.Row(title = "HELP", isHeader = true))
-                add(
-                    RowList.Row(
-                        title = getString(R.string.tour_title),
-                        subtitle = getString(R.string.tour_settings_note),
-                        payload = Entry { startActivity(TourActivity.review(this@SettingsActivity)) },
-                    )
-                )
-
-                add(RowList.Row(title = "ACCOUNT", isHeader = true))
-                add(
-                    RowList.Row(
-                        title = "Profile",
-                        subtitle = store.profileName ?: "Default",
-                        payload = Entry { startActivity(intent(this@SettingsActivity, MODE_PROFILE)) },
-                    )
-                )
-                add(
-                    RowList.Row(
-                        title = "Server",
-                        subtitle = store.serverName ?: "None",
-                        payload = Entry { startActivity(intent(this@SettingsActivity, MODE_SERVER)) },
-                    )
-                )
-                add(
-                    RowList.Row(
-                        title = "Libraries",
-                        subtitle = hiddenSummary(),
-                        payload = Entry { startActivity(intent(this@SettingsActivity, MODE_LIBRARIES)) },
-                    )
-                )
-                add(
-                    RowList.Row(
-                        title = "Sign out",
-                        subtitle = "Unlinks this device",
-                        payload = Entry { askSignOut() },
-                    )
-                )
+            when (tab) {
+                TAB_PLAYBACK -> playbackRows()
+                TAB_DOWNLOADS -> downloadRows()
+                TAB_ACCOUNT -> accountRows()
+                else -> helpRows()
             },
             keepSelection = true,
         )
+    }
+
+    private fun playbackRows(): List<RowList.Row> {
+        val q = Quality.byId(store.quality)
+        return buildList {
+            add(
+                RowList.Row(
+                    title = "Quality",
+                    subtitle = q.summary,
+                    trailing = q.label,
+                    accent = R.color.ff_badge_target,
+                    payload = Entry { cycleQuality() },
+                )
+            )
+            add(
+                RowList.Row(
+                    title = "Subtitles",
+                    subtitle = "Burned in by the server",
+                    trailing = if (store.subtitles) "On" else "Off",
+                    accent = R.color.ff_badge_subs,
+                    payload = Entry { store.subtitles = !store.subtitles; loadRoot() },
+                )
+            )
+            add(
+                RowList.Row(
+                    title = "Subtitle size",
+                    subtitle = "Plex's 100 is sized for a TV",
+                    trailing = "${store.subtitleSize}%",
+                    accent = R.color.ff_badge_subs,
+                    payload = Entry { cycleSubtitleSize() },
+                )
+            )
+            add(
+                RowList.Row(
+                    title = "Wi-Fi only",
+                    subtitle = "Streaming on mobile data",
+                    trailing = NetPolicy.label(store.streamNetwork),
+                    accent = R.color.ff_badge_target,
+                    payload = Entry {
+                        store.streamNetwork = NetPolicy.next(store.streamNetwork)
+                        loadRoot()
+                    },
+                )
+            )
+            // An experiment, not a feature, and labelled as one. The obvious
+            // suspect for a stream that dies partway through a busy evening is
+            // the server's transcoder, and this is the only way to take the
+            // transcoder out of the path and see whether the failures stop. It
+            // will not work on everything, which is why turning it on asks
+            // first -- see [askDirectPlay]. Blue, because direct play is the
+            // file arriving as it already is, and blue is what that colour
+            // means everywhere else in this app.
+            add(
+                RowList.Row(
+                    title = "Try direct play",
+                    subtitle = "Skips the server's transcoder",
+                    trailing = if (store.directPlay) "On" else "Off",
+                    accent = R.color.ff_badge_source,
+                    payload = Entry { toggleDirectPlay() },
+                )
+            )
+            add(
+                RowList.Row(
+                    title = "Details before playing",
+                    subtitle = "Description, tracks, download",
+                    trailing = if (store.showDetails) "On" else "Off",
+                    payload = Entry { store.showDetails = !store.showDetails; loadRoot() },
+                )
+            )
+        }
+    }
+
+    private fun downloadRows(): List<RowList.Row> {
+        val dq = Quality.byId(store.downloadQuality)
+        return buildList {
+            add(
+                RowList.Row(
+                    title = "Downloads",
+                    subtitle = downloadSummary(),
+                    trailing = Downloads.count(this@SettingsActivity).toString(),
+                    accent = R.color.ff_badge_local,
+                    payload = Entry { startActivity(DownloadsActivity.intent(this@SettingsActivity)) },
+                )
+            )
+            add(
+                RowList.Row(
+                    title = "Download quality",
+                    subtitle = dq.summary,
+                    trailing = dq.label,
+                    accent = R.color.ff_badge_local,
+                    payload = Entry { cycleDownloadQuality() },
+                )
+            )
+            add(
+                RowList.Row(
+                    title = "Wi-Fi only",
+                    subtitle = "Downloading on mobile data",
+                    trailing = NetPolicy.label(store.downloadNetwork),
+                    accent = R.color.ff_badge_local,
+                    payload = Entry {
+                        store.downloadNetwork = NetPolicy.next(store.downloadNetwork)
+                        loadRoot()
+                    },
+                )
+            )
+            add(
+                RowList.Row(
+                    title = "Delete once watched",
+                    subtitle = "When an episode reaches the end",
+                    accent = R.color.ff_badge_local,
+                    trailing = if (store.downloadDeleteWatched) "On" else "Off",
+                    payload = Entry {
+                        store.downloadDeleteWatched = !store.downloadDeleteWatched
+                        loadRoot()
+                    },
+                )
+            )
+        }
+    }
+
+    private fun accountRows(): List<RowList.Row> = buildList {
+        add(
+            RowList.Row(
+                title = "Profile",
+                subtitle = store.profileName ?: "Default",
+                payload = Entry { startActivity(intent(this@SettingsActivity, MODE_PROFILE)) },
+            )
+        )
+        add(
+            RowList.Row(
+                title = "Server",
+                subtitle = store.serverName ?: "None",
+                payload = Entry { startActivity(intent(this@SettingsActivity, MODE_SERVER)) },
+            )
+        )
+        add(
+            RowList.Row(
+                title = "Libraries",
+                subtitle = hiddenSummary(),
+                payload = Entry { startActivity(intent(this@SettingsActivity, MODE_LIBRARIES)) },
+            )
+        )
+        add(
+            RowList.Row(
+                title = "Sign out",
+                subtitle = "Unlinks this device",
+                payload = Entry { askSignOut() },
+            )
+        )
+    }
+
+    /**
+     * The tour, and the two lines that say what the app is.
+     *
+     * The tour is shown once on the first launch and then never again unless it
+     * is asked for, so this row is the only way back to it -- and someone
+     * looking for it is looking for help with the keypad, not for something
+     * filed under whichever account they signed in with.
+     */
+    private fun helpRows(): List<RowList.Row> = buildList {
+        add(
+            RowList.Row(
+                title = getString(R.string.tour_title),
+                subtitle = getString(R.string.tour_settings_note),
+                payload = Entry { startActivity(TourActivity.review(this@SettingsActivity)) },
+            )
+        )
+        add(
+            RowList.Row(
+                title = "FlipFlex ${versionName()} · a text-only Plex client for this handset. " +
+                    "Everything it plays is converted by your server first, so every file in " +
+                    "the library behaves the same way.",
+                isBlurb = true,
+            )
+        )
+    }
+
+    private fun versionName(): String = runCatching {
+        packageManager.getPackageInfo(packageName, 0).versionName.orEmpty()
+    }.getOrDefault("")
+
+    /** Move to a tab and draw it. Out-of-range digits are ignored, not clamped. */
+    private fun showTab(index: Int): Boolean {
+        val strip = tabs ?: return false
+        if (index !in 0 until strip.count) return false
+        tab = index
+        strip.setFocused(false)
+        list.parked = false
+        // Not keepSelection: a different tab is a different list, and holding
+        // the index would land the cursor on whatever happens to be third here.
+        loadRoot()
+        list.select(0)
+        return true
+    }
+
+    /**
+     * Turning direct play on is a question; turning it off is not.
+     *
+     * The asymmetry is the point. Off is the state everything is tested in and
+     * the state that works on every file, so going back to it needs no
+     * ceremony. On is an experiment that is *expected* to fail on part of any
+     * library, and someone who switches it on without being told that reports it
+     * as "playback is broken" -- which is the one report this note exists to
+     * prevent.
+     */
+    private fun toggleDirectPlay() {
+        if (store.directPlay) {
+            store.directPlay = false
+            loadRoot()
+            return
+        }
+        confirm(
+            heading = getString(R.string.direct_play_title),
+            confirmLabel = getString(R.string.direct_play_go),
+            note = getString(R.string.direct_play_note),
+        ) {
+            store.directPlay = true
+            loadRoot()
+        }
     }
 
     /**
@@ -563,22 +704,60 @@ class SettingsActivity : FlipActivity() {
 
     // ---- keys --------------------------------------------------------------
 
+    override fun onHeaderFocusChanged(on: Boolean) {
+        list.parked = on
+    }
+
     override fun onAction(action: Action, keyCode: Int): Boolean {
         // The PIN pad owns every key while it is up, including BACK -- which
         // deletes a digit rather than leaving the screen until the field is
-        // empty, the same as every other PIN field anyone has used.
+        // empty, the same as every other PIN field anyone has used. It owns the
+        // digits too, which is why this runs before the tab shortcuts below.
         if (pinView != null && handlePinKey(action, keyCode)) return true
 
+        val strip = tabs
+        if (strip != null && strip.focused) {
+            return when (action) {
+                Action.LEFT -> { strip.move(-1); true }
+                Action.RIGHT -> { strip.move(+1); true }
+                Action.SELECT -> showTab(strip.cursor)
+                Action.DOWN, Action.BACK -> {
+                    strip.setFocused(false); list.parked = false; true
+                }
+                // One more press of up leaves the strip for the header, which is
+                // the only thing above it. The chain is list, tabs, title.
+                Action.UP -> {
+                    if (focusHeader(true)) { strip.setFocused(false) }
+                    true
+                }
+                Action.DIGIT -> showTab(KeyMap.digitOf(keyCode) - 1)
+                else -> false
+            }
+        }
+
         return when (action) {
-            Action.UP -> list.move(-1)
+            Action.UP -> list.move(-1) || focusTabs() || focusHeader(true)
             Action.DOWN -> list.move(+1)
-            // The root list is fifteen rows on a screen that shows seven, so it
-            // needs paging like every other long list in the app.
-            Action.LEFT, Action.STAR -> list.move(-7)
-            Action.RIGHT, Action.POUND -> list.move(+7)
+            // Left is up a level, everywhere in the app that is not the player.
+            // The lists here are all shorter than the screen now, so paging
+            // them was the key's only other job and it had nothing to do.
+            Action.LEFT -> { goUp(); true }
+            Action.STAR -> list.move(-5)
+            Action.RIGHT, Action.POUND -> list.move(+5)
+            // A digit is the tab of that number. On a four-tab screen this is
+            // the difference between two presses and nine.
+            Action.DIGIT -> showTab(KeyMap.digitOf(keyCode) - 1)
             Action.SELECT -> if (list.rows.isEmpty()) { load(); true } else list.choose()
             else -> false
         }
+    }
+
+    /** Returns true when the strip took the cursor, so the caller can stop. */
+    private fun focusTabs(): Boolean {
+        val strip = tabs ?: return false
+        strip.setFocused(true)
+        list.parked = true
+        return true
     }
 
     override fun onResume() {

@@ -299,10 +299,18 @@ class DownloadsActivity : FlipActivity() {
         }
     }
 
+    override fun onHeaderFocusChanged(on: Boolean) {
+        list.parked = on
+    }
+
     override fun onAction(action: Action, keyCode: Int): Boolean = when (action) {
-        Action.UP -> list.move(-1)
+        Action.UP -> list.move(-1) || focusHeader(true)
         Action.DOWN -> list.move(+1)
-        Action.LEFT, Action.STAR -> list.move(-7)
+        // Left is up a level here too -- out of a season, out of a show, out of
+        // Downloads -- which on a screen three levels deep is worth more than
+        // the backwards page it used to be. Star still pages.
+        Action.LEFT -> { goUp(); true }
+        Action.STAR -> list.move(-7)
         Action.RIGHT, Action.POUND -> list.move(+7)
         Action.SELECT -> if (list.rows.isEmpty()) { render(); true } else list.choose()
         else -> false

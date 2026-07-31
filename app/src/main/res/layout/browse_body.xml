@@ -24,53 +24,11 @@
     android:layout_height="match_parent"
     android:orientation="vertical">
 
-    <LinearLayout
+    <com.github.jackharvest.flipflex.ui.TabStrip
         android:id="@+id/browse_tabs"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:baselineAligned="false"
-        android:visibility="gone">
-
-        <TextView
-            android:id="@+id/browse_tab_0"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:maxLines="1"
-            android:ellipsize="end"
-            android:paddingVertical="1dp"
-            android:text="@string/tab_recommended"
-            android:textColor="@color/ff_text_dim"
-            android:textSize="9sp" />
-
-        <TextView
-            android:id="@+id/browse_tab_1"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:maxLines="1"
-            android:ellipsize="end"
-            android:paddingVertical="1dp"
-            android:text="@string/tab_library"
-            android:textColor="@color/ff_text_dim"
-            android:textSize="9sp" />
-
-        <TextView
-            android:id="@+id/browse_tab_2"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:maxLines="1"
-            android:ellipsize="end"
-            android:paddingVertical="1dp"
-            android:text="@string/tab_categories"
-            android:textColor="@color/ff_text_dim"
-            android:textSize="9sp" />
-    </LinearLayout>
+        android:visibility="gone" />
 
     <View
         android:id="@+id/browse_tabs_rule"

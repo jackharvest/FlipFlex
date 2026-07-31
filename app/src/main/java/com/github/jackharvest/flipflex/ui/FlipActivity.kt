@@ -12,9 +12,12 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.github.jackharvest.flipflex.R
+import com.github.jackharvest.flipflex.dl.Downloads
 import com.github.jackharvest.flipflex.input.Action
 import com.github.jackharvest.flipflex.input.KeyMap
 import com.github.jackharvest.flipflex.plex.PlexClient
+import com.github.jackharvest.flipflex.store.Net
+import com.github.jackharvest.flipflex.store.NetPolicy
 import com.github.jackharvest.flipflex.store.Store
 
 /**
@@ -47,6 +50,7 @@ abstract class FlipActivity : AppCompatActivity() {
 
     protected lateinit var store: Store
 
+    private lateinit var headerBar: View
     private lateinit var headerTitle: TextView
     private lateinit var headerChevron: TextView
     private lateinit var headerBusy: TextView
@@ -55,6 +59,7 @@ abstract class FlipActivity : AppCompatActivity() {
     private lateinit var softRight: TextView
     private lateinit var optionsScrim: View
     private lateinit var optionsTitle: TextView
+    private lateinit var optionsNote: TextView
     private lateinit var optionsList: LinearLayout
 
     /** An entry in the Options panel. */
@@ -67,12 +72,16 @@ abstract class FlipActivity : AppCompatActivity() {
     /** Set by [showTransientMessage]; the next key press takes the message down. */
     private var messageIsTransient = false
 
+    /** True while the `‹ Title` header is the cursor. See [focusHeader]. */
+    private var headerFocused = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         store = Store(this)
         PlexClient.clientId = store.clientId
 
         setContentView(R.layout.flip_shell)
+        headerBar = findViewById(R.id.header_bar)
         headerTitle = findViewById(R.id.header_title)
         headerChevron = findViewById(R.id.header_chevron)
         headerBusy = findViewById(R.id.header_busy)
@@ -81,6 +90,7 @@ abstract class FlipActivity : AppCompatActivity() {
         softRight = findViewById(R.id.soft_right)
         optionsScrim = findViewById(R.id.options_scrim)
         optionsTitle = findViewById(R.id.options_title)
+        optionsNote = findViewById(R.id.options_note)
         optionsList = findViewById(R.id.options_list)
 
         setSoftKeys(left = "Home", right = "Options")
@@ -113,6 +123,64 @@ abstract class FlipActivity : AppCompatActivity() {
     protected fun setHeader(title: String, showChevron: Boolean = true) {
         headerTitle.text = title
         headerChevron.visibility = if (showChevron) View.VISIBLE else View.GONE
+        // A header that is not offering to go anywhere must not be a place the
+        // cursor can get stuck: Home draws no chevron, and Home is where up
+        // stops.
+        if (!showChevron && headerFocused) focusHeader(false)
+        paintHeader()
+    }
+
+    // ---- the header as a control -------------------------------------------
+
+    /**
+     * Put the cursor on the `‹ Title` header, where OK goes up a level.
+     *
+     * ## Why the header is pressable at all
+     *
+     * Two reasons, and the second is the serious one. The first is that it is
+     * what the chevron has always looked like it meant -- every touchscreen this
+     * user has held has a back arrow in exactly that corner, and on this handset
+     * it was decoration. The second is that **the back arrow is a physical key
+     * that can break**, and on a phone this age that is not hypothetical. With
+     * left-as-back and this, going up a level survives losing it.
+     *
+     * Reached by pressing up off the top of a screen -- past the tab strip where
+     * there is one -- so it is the end of the same chain the tabs are on rather
+     * than a separate gesture to learn.
+     *
+     * Returns false, and does nothing, where there is no level to go up to: the
+     * home screen draws no chevron for exactly that reason.
+     */
+    protected fun focusHeader(on: Boolean): Boolean {
+        if (on && headerChevron.visibility != View.VISIBLE) return false
+        if (headerFocused == on) return on
+        headerFocused = on
+        paintHeader()
+        onHeaderFocusChanged(on)
+        return true
+    }
+
+    protected val isHeaderFocused: Boolean get() = headerFocused
+
+    /**
+     * Tell the screen its list no longer owns the cursor.
+     *
+     * Every screen with a list parks it here. Two amber bars is two cursors --
+     * the same reason [RowList.parked] exists for the tab strip and the A-Z rail.
+     */
+    protected open fun onHeaderFocusChanged(on: Boolean) {}
+
+    /** Up one level, as the back arrow does it. Overridden where Back is special. */
+    protected open fun goUp() {
+        @Suppress("DEPRECATION")
+        onBackPressed()
+    }
+
+    private fun paintHeader() {
+        val lit = headerFocused
+        headerBar.setBackgroundColor(if (lit) getColor(R.color.ff_amber) else 0)
+        headerTitle.setTextColor(getColor(if (lit) R.color.ff_ground else R.color.ff_text))
+        headerChevron.setTextColor(getColor(if (lit) R.color.ff_ground else R.color.ff_text_dim))
     }
 
     /**
@@ -209,11 +277,13 @@ abstract class FlipActivity : AppCompatActivity() {
 
     private fun openOptions() = showPanel(optionsHeading(), optionsFor())
 
-    private fun showPanel(heading: String, entries: List<Option>) {
+    private fun showPanel(heading: String, entries: List<Option>, note: String? = null) {
         if (entries.isEmpty()) return
         options = entries
         optionIndex = 0
         optionsTitle.text = heading
+        optionsNote.text = note.orEmpty()
+        optionsNote.visibility = if (note == null) View.GONE else View.VISIBLE
         optionsList.removeAllViews()
         val inflater = LayoutInflater.from(this)
         entries.forEach { opt ->
@@ -253,14 +323,94 @@ abstract class FlipActivity : AppCompatActivity() {
         }
     }
 
-    protected fun confirm(heading: String, confirmLabel: String, onConfirm: () -> Unit) {
+    /**
+     * [note] is the paragraph between the question and the two answers.
+     *
+     * Optional, because most confirmations are about something the user is
+     * looking at -- "Delete Ocean's Thirteen?" needs no explaining. It exists
+     * for the two that are not: turning direct play on, where the answer depends
+     * on what the SoC can decode, and streaming over mobile data, where it
+     * depends on what somebody's plan costs. Both of those are decisions nobody
+     * can make from a title alone, and a question that cannot be answered is
+     * one people learn to dismiss.
+     */
+    protected fun confirm(
+        heading: String,
+        confirmLabel: String,
+        note: String? = null,
+        onConfirm: () -> Unit,
+    ) {
         showPanel(
             heading,
             listOf(
                 Option("Cancel") {},
                 Option(confirmLabel, onConfirm),
             ),
+            note = note,
         )
+    }
+
+    // ---- playback, and what it may cost ------------------------------------
+
+    /**
+     * Open the player, having first checked this is not about to spend a data
+     * allowance somebody was saving.
+     *
+     * ## Why this is in the shell and not in the player
+     *
+     * Six screens start playback, and the check has to happen *before* the
+     * player exists: it is a question, and a question asked over a screen that
+     * has already torn down the list behind it has nowhere to go back to when
+     * the answer is no. It also has to be asked before the transcode is
+     * requested, or the server has already begun spending the data the dialog is
+     * about.
+     *
+     * A downloaded copy is never guarded. The player prefers the local file --
+     * that is the entire point of the download -- so the radio is not involved
+     * and a warning about mobile data would simply be wrong.
+     */
+    protected fun startPlayback(playerIntent: android.content.Intent) {
+        val key = playerIntent.getStringExtra(PlayerActivity.EXTRA_KEY).orEmpty()
+        val isLocal = key.isNotEmpty() && Downloads.playableFile(this, key) != null
+        if (isLocal || !Net.metered(this)) {
+            startActivity(playerIntent)
+            return
+        }
+        when (store.streamNetwork) {
+            NetPolicy.WIFI_ONLY -> showTransientMessage(getString(R.string.net_stream_blocked))
+            NetPolicy.ASK -> confirm(
+                heading = getString(R.string.net_stream_title),
+                confirmLabel = getString(R.string.net_stream_go),
+                note = getString(R.string.net_stream_note),
+            ) { startActivity(playerIntent) }
+            else -> startActivity(playerIntent)
+        }
+    }
+
+    /**
+     * The same question for a download, answered where the user pressed the
+     * button rather than silently in the service.
+     *
+     * Under [NetPolicy.WIFI_ONLY] the download is still queued -- it will start
+     * by itself on the next Wi-Fi -- because a queue that waits is the feature,
+     * and refusing to write the row would make the user come back and press it
+     * again. [onGo] runs either way; the difference is what the screen says
+     * afterwards, which is why the caller is told which it was.
+     */
+    protected fun startDownload(onGo: (waitsForWifi: Boolean) -> Unit) {
+        if (!Net.metered(this)) {
+            onGo(false)
+            return
+        }
+        when (store.downloadNetwork) {
+            NetPolicy.WIFI_ONLY -> onGo(true)
+            NetPolicy.ASK -> confirm(
+                heading = getString(R.string.net_download_title),
+                confirmLabel = getString(R.string.net_download_go),
+                note = getString(R.string.net_download_note),
+            ) { onGo(false) }
+            else -> onGo(false)
+        }
     }
 
     protected fun closeOptions() {
@@ -341,7 +491,33 @@ abstract class FlipActivity : AppCompatActivity() {
         onKeyPressed(action)
 
         // The key still does its normal job; it only also dismisses the remark.
-        if (messageIsTransient) showMessage(null)
+        //
+        // Back is the exception, and it was a real bug. "This file has no
+        // subtitle tracks" fills the content frame, so it reads as a screen --
+        // and the obvious way off a screen is Back, which dismissed the message
+        // *and* left the details page, landing the user two levels up in the
+        // library with no idea why. Taking the remark down is a whole job for
+        // one key press.
+        if (messageIsTransient) {
+            showMessage(null)
+            if (action == Action.BACK) return true
+        }
+
+        // The header is a control while it is lit, and everything else on the
+        // screen is parked behind it.
+        if (headerFocused) {
+            when (action) {
+                Action.SELECT, Action.BACK -> { focusHeader(false); goUp() }
+                Action.DOWN -> focusHeader(false)
+                Action.SOFT_LEFT -> { focusHeader(false); goHome() }
+                Action.SOFT_RIGHT -> { focusHeader(false); openOptions() }
+                // Left is back everywhere else in the app, and the header is
+                // where back already lives. Up is swallowed: this is the top.
+                Action.LEFT -> { focusHeader(false); goUp() }
+                else -> Unit
+            }
+            return true
+        }
 
         if (optionsOpen) {
             // The panel is a vertical list drawn on the screen, so it has to be

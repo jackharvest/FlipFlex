@@ -11,6 +11,7 @@ import android.widget.TextView
 import androidx.lifecycle.lifecycleScope
 import com.github.jackharvest.flipflex.R
 import com.github.jackharvest.flipflex.input.Action
+import com.github.jackharvest.flipflex.input.KeyMap
 import com.github.jackharvest.flipflex.plex.PlexItem
 import com.github.jackharvest.flipflex.plex.PlexLibrary
 import kotlinx.coroutines.Job
@@ -109,7 +110,7 @@ class BrowseActivity : FlipActivity() {
 
     private lateinit var list: RowList
     private lateinit var rail: LinearLayout
-    private lateinit var tabBar: View
+    private lateinit var tabBar: TabStrip
     private lateinit var tabRule: View
     private lateinit var mode: String
     private lateinit var key: String
@@ -143,12 +144,6 @@ class BrowseActivity : FlipActivity() {
     private var railIndex = 0
     private var railFocused = false
 
-    // ---- tab state ---------------------------------------------------------
-
-    private var tabs: List<TextView> = emptyList()
-    private var tabIndex = 0
-    private var tabsFocused = false
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         mode = intent.getStringExtra(EXTRA_MODE) ?: MODE_ONDECK
@@ -163,10 +158,12 @@ class BrowseActivity : FlipActivity() {
         rail = body.findViewById(R.id.letter_rail)
         tabBar = body.findViewById(R.id.browse_tabs)
         tabRule = body.findViewById(R.id.browse_tabs_rule)
-        tabs = listOf(
-            body.findViewById(R.id.browse_tab_0),
-            body.findViewById(R.id.browse_tab_1),
-            body.findViewById(R.id.browse_tab_2),
+        tabBar.setTabs(
+            listOf(
+                getString(R.string.tab_recommended),
+                getString(R.string.tab_library),
+                getString(R.string.tab_categories),
+            )
         )
         list = RowList(this)
         body.findViewById<FrameLayout>(R.id.browse_list_holder).addView(list)
@@ -400,34 +397,30 @@ class BrowseActivity : FlipActivity() {
         val show = active != null
         tabBar.visibility = if (show) View.VISIBLE else View.GONE
         tabRule.visibility = if (show) View.VISIBLE else View.GONE
-        if (active != null) tabIndex = active
-        paintTabs()
-    }
-
-    private fun paintTabs() {
-        val active = activeTab() ?: return
-        tabs.forEachIndexed { i, tv ->
-            val on = tabsFocused && i == tabIndex
-            tv.setBackgroundColor(if (on) getColor(R.color.ff_amber) else 0)
-            tv.setTextColor(
-                getColor(
-                    when {
-                        on -> R.color.ff_ground
-                        i == active -> R.color.ff_amber
-                        else -> R.color.ff_text_dim
-                    }
-                )
-            )
-        }
+        if (active != null) tabBar.setActive(active)
     }
 
     /** Returns true when the strip took the cursor, so the caller can consume the key. */
     private fun focusTabs(on: Boolean): Boolean {
         if (activeTab() == null) return false
-        tabsFocused = on
-        if (on) tabIndex = activeTab() ?: 0
+        tabBar.setFocused(on)
         list.parked = on
-        paintTabs()
+        return true
+    }
+
+    /**
+     * `1` is the first tab, `2` the second, and so on.
+     *
+     * Ignored rather than clamped where the digit names no tab: pressing 7 on a
+     * three-tab screen must not switch to Categories, because the user was
+     * plainly not asking for Categories. Ignored too where the screen has no
+     * strip at all -- a season's episode list has nothing for a digit to mean.
+     */
+    private fun chooseTabByDigit(keyCode: Int): Boolean {
+        if (activeTab() == null) return false
+        val wanted = KeyMap.digitOf(keyCode) - 1
+        if (wanted !in 0 until tabBar.count) return false
+        switchTab(wanted)
         return true
     }
 
@@ -626,7 +619,10 @@ class BrowseActivity : FlipActivity() {
         if (type == "season" && parentTitle.isNotEmpty()) "$parentTitle · $title" else title
 
     private fun play(item: PlexItem, resume: Boolean) {
-        startActivity(
+        // startPlayback rather than startActivity: it is the one place that
+        // knows whether this would come over somebody's mobile data, and it
+        // asks before the transcode is requested rather than after.
+        startPlayback(
             PlayerActivity.intent(
                 this,
                 ratingKey = item.ratingKey,
@@ -803,53 +799,80 @@ class BrowseActivity : FlipActivity() {
 
     // ---- keys --------------------------------------------------------------
 
+    override fun onHeaderFocusChanged(on: Boolean) {
+        list.parked = on
+    }
+
     override fun onAction(action: Action, keyCode: Int): Boolean {
-        if (tabsFocused) {
+        if (tabBar.focused) {
             return when (action) {
-                Action.LEFT -> { tabIndex = (tabIndex - 1).coerceAtLeast(0); paintTabs(); true }
-                Action.RIGHT -> {
-                    tabIndex = (tabIndex + 1).coerceAtMost(tabs.size - 1); paintTabs(); true
-                }
-                Action.SELECT -> { switchTab(tabIndex); true }
+                Action.LEFT -> { tabBar.move(-1); true }
+                Action.RIGHT -> { tabBar.move(+1); true }
+                Action.SELECT -> { switchTab(tabBar.cursor); true }
                 Action.DOWN, Action.BACK -> { focusTabs(false); true }
-                // Up is swallowed, not passed on and not treated as "leave".
-                // The strip is the top of the screen, so a second press of the
-                // key that got you here has nowhere to go -- and dropping back
-                // into the list would make the key mean "in" then "out", which
-                // is not what any other Up press in the app does.
-                Action.UP -> true
+                // Up used to be swallowed here, because the strip was the top of
+                // the screen and there was nowhere further to go. There is now:
+                // the header, where OK goes up a level. So the chain runs list,
+                // tabs, title, and every step of it is one press of the same key.
+                Action.UP -> {
+                    if (focusHeader(true)) focusTabs(false)
+                    true
+                }
+                Action.DIGIT -> chooseTabByDigit(keyCode)
                 else -> false
             }
         }
 
         if (railFocused) {
             return when (action) {
-                Action.UP -> { railIndex = (railIndex - 1).coerceAtLeast(0); paintRail(); true }
+                // Off the top of the alphabet is the tab strip. The rail is the
+                // one place in the app where the cursor can be a long way from
+                // the top of a several-hundred-row list, and this is the way
+                // back up that does not involve holding a key: Z to A, then one
+                // more press, then Recommended.
+                Action.UP -> {
+                    if (railIndex == 0) {
+                        focusRail(false)
+                        if (!focusTabs(true)) focusHeader(true)
+                    } else {
+                        railIndex -= 1
+                        paintRail()
+                    }
+                    true
+                }
                 Action.DOWN -> {
                     railIndex = (railIndex + 1).coerceAtMost(letters.size - 1); paintRail(); true
                 }
                 Action.SELECT -> { jumpToLetter(); true }
                 Action.LEFT, Action.BACK -> { focusRail(false); true }
+                Action.DIGIT -> { focusRail(false); chooseTabByDigit(keyCode) }
                 else -> false
             }
         }
 
         return when (action) {
-            // Up off the top row steps into the tab strip, which is how it is
-            // reached at all -- there is no other spare key, and it sits
-            // directly above the list.
-            Action.UP -> list.move(-1) || focusTabs(true)
+            // Up off the top row steps into the tab strip, and off the top of
+            // that into the header. Where there is no strip -- a season, a
+            // "more" list -- it goes straight to the header.
+            Action.UP -> list.move(-1) || focusTabs(true) || focusHeader(true)
             Action.DOWN -> list.move(+1)
-            // Right steps into the letter rail when there is one. Where there is
-            // not, left and right page instead -- there is nothing else for them
-            // to do, and a dead key on a device with this few is waste.
+            // Right steps into the letter rail where there is one, and pages
+            // where there is not.
             Action.RIGHT -> if (letters.isNotEmpty()) { focusRail(true); true } else list.move(+PAGE_JUMP)
-            Action.LEFT -> if (letters.isNotEmpty()) false else list.move(-PAGE_JUMP)
+            // Left is up a level, on every screen in the app but the player.
+            // It used to page backwards, which star already does, and paging
+            // was the less valuable of the two: a back arrow is one small
+            // physical key on a phone that may well outlive it.
+            Action.LEFT -> { goUp(); true }
             // Star and hash page, always. They arrive on this handset, they have
-            // no other job, and paging has to stay reachable once left and right
-            // are spent on the rail.
+            // no other job, and paging has to stay reachable once left is spent
+            // on going back and right on the rail.
             Action.STAR -> list.move(-PAGE_JUMP)
             Action.POUND -> list.move(+PAGE_JUMP)
+            // A digit is the tab of that number, from anywhere in the list. The
+            // point is the six-hundred-title A-Z: getting back to Recommended
+            // was a held key and a wait, and it is now one press.
+            Action.DIGIT -> chooseTabByDigit(keyCode)
             Action.SELECT -> if (list.rows.isEmpty()) {
                 // An empty Recommended view offers the A-Z instead.
                 if (mode == MODE_RECOMMENDED) switchTab(TAB_LIBRARY) else load()

@@ -179,13 +179,37 @@ softkey bar as `Back | Select`.
 | Back arrow | Up one level |
 | D-pad centre | Select |
 | D-pad ↑/↓ | Move selection |
-| D-pad ↑ at the top row | Step into the library view tabs, where ←/→ choose one |
-| D-pad ←/→ in a list | Page by about 7 rows, or step into the A-Z rail where there is one |
+| D-pad ↑ at the top row | Step into the tab strip, where ←/→ choose a tab |
+| D-pad ↑ above the tabs | Light the `‹ Title` header, where OK also goes up a level |
+| **D-pad ←in a list** | **Up one level, the same as the back arrow** |
+| D-pad → in a list | Page by about 7 rows, or step into the A-Z rail where there is one |
+| D-pad ↑ at the top of the A-Z rail | Leave the rail for the tab strip |
 | D-pad ←/→ in the player | Seek ∓15 s |
 | D-pad ↑/↓ in the player | Seek as well, in whichever direction the current rotation points them |
 | Volume rocker | Not consumed. The system's own handling is what users expect |
 | `CALL` | **Search**, from every screen but the player. Caught in `dispatchKeyEvent`, or the dialer takes it |
-| `*` `#`, digits | Page up/down in a list; digits are the PIN pad. Otherwise unbound |
+| `*` `#` | Page up/down in a list |
+| digits | The tab of that number where a screen has tabs; the PIN pad; typing on the search screen, via the system IME |
+
+**Left is a second Back, and it cost a page key to be one.** ← used to page
+backwards, which `*` already did. The back arrow is a single small mechanical
+key on a phone that is not new, and losing it used to mean losing the ability to
+go up a level at all — the softkeys are Home and Options, and neither is Back.
+So ← is now Back everywhere but the player, and the same reasoning put a cursor
+on the `‹ Title` header: two independent ways up, neither of them that one key.
+
+**Digits reach a tab directly.** `1` is the leftmost tab, `2` the next. This
+matters most in an A-Z of six hundred titles, where getting back to the
+Recommended strip meant holding ↑ and waiting; it is now one press from wherever
+the cursor is. Out-of-range digits are ignored rather than clamped — pressing 7
+on a three-tab screen was not a request for Categories.
+
+**The number keys also type.** The handset ships `com.iqqijni.dvt912key`, a real
+T9 IME, and the search field is a plain `EditText` over it. Whether it is in
+predictive mode is *not* readable from an app — the mode belongs to the IME and
+is exposed nowhere — so the search screen carries a permanent one-line tip
+saying to press `#` until the display reads `EN KT9`, rather than trying to
+detect it and only mentioning it when needed.
 
 **A rotated screen breaks the printed labels, and the code has to know.** The
 player can be turned three ways, and in either landscape the key printed "up"

@@ -113,13 +113,26 @@ class TourActivity : FlipActivity() {
                 "is also Play.",
         ),
         Step(
-            parts = setOf(Part.BACK),
+            parts = setOf(Part.BACK, Part.DPAD_LR),
             anchor = Part.BACK,
             label = "Up a level",
             onRight = true,
-            title = "The back arrow",
-            body = "Goes up one level: episode to season, season to show. This is the " +
-                "Back key. Neither soft key is.",
+            title = "Back, two ways",
+            // Left is taught here rather than in its own step because it is the
+            // same idea and not a second one -- and because the reason it exists
+            // is that this key is small, old and breakable.
+            body = "Goes up one level: episode to season, season to show. Neither soft " +
+                "key is Back.\nLeft on the pad does the same thing, in case this key " +
+                "ever stops working.",
+        ),
+        Step(
+            parts = setOf(Part.DPAD_UD),
+            anchor = Part.DPAD_UD,
+            label = "The title",
+            onRight = false,
+            title = "Up, past the top",
+            body = "Keep pressing up past the first row and the cursor reaches the tabs, " +
+                "then the ‹ title at the very top. OK on the title also goes up a level.",
         ),
         Step(
             parts = setOf(Part.SOFT_LEFT, Part.SCREEN_LABEL_L),
@@ -149,13 +162,13 @@ class TourActivity : FlipActivity() {
                 "phone can, so it never dials anyone.",
         ),
         Step(
-            parts = setOf(Part.STAR, Part.POUND, Part.DPAD_LR),
+            parts = setOf(Part.STAR, Part.POUND),
             anchor = Part.STAR,
             label = "Page",
             onRight = false,
             title = "Star and hash",
-            body = "Jump about seven rows at a time. Left and right on the pad do the " +
-                "same thing in a list.",
+            body = "Jump about seven rows at a time. Right on the pad pages down too, or " +
+                "steps into the A-Z letters where a library has them.",
         ),
         Step(
             parts = setOf(Part.DPAD_LR),
@@ -169,11 +182,16 @@ class TourActivity : FlipActivity() {
         Step(
             parts = setOf(Part.DIGITS),
             anchor = Part.DIGITS,
-            label = "PIN",
+            label = "Type · Tabs",
             onRight = true,
+            // This step used to say the digits were for a Plex Home PIN and
+            // nothing else, which was true of the app and quite wrong about the
+            // phone: the keypad is the one input advantage this handset has, and
+            // search is the fastest way into a library of two thousand films.
             title = "The number keys",
-            body = "Only used for a Plex Home PIN, when you switch to a profile that has " +
-                "one. Nothing else needs them.",
+            body = "Type on the search screen — press # there until the display reads " +
+                "EN KT9 and it predicts words.\nIn a library, 1 is the first tab, 2 the " +
+                "second. They also enter a Plex Home PIN.",
         ),
         Step(
             parts = setOf(Part.FAV, Part.MSG),

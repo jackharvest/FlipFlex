@@ -78,10 +78,30 @@ Round five, on the handset on 2026-07-31. The first-run controls tour:
 | Step | Evidence |
 |---|---|
 | First launch | With `tour_seen` absent, the splash hands off to the tour rather than to Home; OK on the last step lands on `HomeActivity` |
-| All eleven steps | Each lights its own control: ring arcs, OK, back arrow, either soft key with its own on-screen label, the green key, star and hash, the nine digits, favourites and mail, the hinge |
+| All twelve steps | Each lights its own control: ring arcs, OK, back arrow, either soft key with its own on-screen label, the green key, star and hash, the nine digits, favourites and mail, the hinge |
 | Two D-pad steps | Up/down lights the top and bottom arcs, left/right the sides — the two are not the same picture |
 | Key jumps | The green call key jumps to the search step and `0` to the PIN step, instead of opening search or doing nothing |
 | Reachable again | Settings → HELP → Controls, with the left soft key reading "Done" and Back returning to the settings list |
+
+Round six, on the handset on 2026-07-31. Navigation, continuity and the two
+network policies:
+
+| Step | Evidence |
+|---|---|
+| Settings is tabbed | `Playback · Downloads · Account · Help`, all four inside 240dp; `2` and `4` jump straight to a tab |
+| The lost highlight | Crossing `SETTINGS FOR THIS` on a details page now leaves the amber bar on the first row *under* the caption, on screen. It used to land off the bottom |
+| Settings colours | Quality green, Subtitles and size rose, Wi-Fi only green, direct play blue, every Downloads row violet — the same four meanings as the details page |
+| Direct play | Turning it **on** opens a panel naming the codecs and the 1600x960 ceiling, with Cancel under the cursor. Turning it off asks nothing |
+| Streaming on LTE | Wi-Fi off, server reached over `usb-plex.sh`: Play opened *Stream over mobile data?*, Cancel default, "Play anyway" decoded on the first attempt |
+| Download on LTE | With Wi-Fi only `On`, Download queued the row and said it would fetch itself on the next Wi-Fi |
+| Before and after | *The Secret World of Arrietty* — `1080p H264 9.9 Mbps DCA 5.1` → `320x240 800 kbps AAC Stereo`, two columns with an arrow between them |
+| No subtitle tracks | *3 Ninjas* → Subtitles → "This file has no subtitle tracks" → **Back returns to 3 Ninjas**, not to Movies |
+| Left is Back | ← left Settings for Home, and a details page for the library it was opened from |
+| Up past the top | List → tab strip → `‹ Settings` lit amber; OK there went up a level |
+| Off the top of the A-Z | Rail at `#`, one more ↑, and the `Library` tab took the cursor |
+| Search tip | The `EN KT9` line sits under the results while the field has the cursor, and gives its two rows back when the cursor moves into them |
+| The tour | Twelve steps; the new ones light the back arrow with the pad's left/right, and the digits |
+| Home | No `Reorder libraries` row. It is in Options, where it always also was |
 
 ## The traps, in the order they cost time
 
@@ -126,6 +146,35 @@ added — and the length depends on the positions. `CueTime` and
 circle: the encoded size then depends only on the number of cue points, so the
 index can be built once to measure and again with the shift applied. There is
 an assertion that the two agree; do not remove it.
+
+### A minimal scroll can hide the cursor, and a caption is what makes it happen
+
+The report was "the highlighted row is sometimes completely absent from the
+screen, usually when entering a new subheading area", reproduced most easily in
+Settings. It was not a paint bug and not a focus bug.
+
+`RowList.scrollToCursor` picked **one** anchor row and scrolled to it, and one
+of its three cases picked a row that was not the cursor: moving onto the first
+row of a group, it anchored on the *caption above* so the caption would stay
+visible. `LinearLayoutManager.scrollToPosition` is a minimal scroll — a target
+that is already fully on screen moves the list not at all — so with the caption
+occupying the last visible line, nothing scrolled and the selected row sat just
+below the viewport. The amber bar was then off screen with no indication of
+where, and pressing down again simply moved it further away.
+
+The rule now is that **the selected row is on screen, always**, and the caption
+is a preference that only applies when the cursor is travelling upwards:
+
+- everything above the cursor unselectable → pin to 0, so a details page shows
+  its summary and a grouped list its first caption;
+- cursor above the viewport → bring it to the top, taking its caption with it;
+- cursor below the viewport → bring it to the bottom, caption or no caption;
+- otherwise hold still, which is also what stops the list twitching under a
+  held key.
+
+`findFirstCompletelyVisibleItemPosition` returning `NO_POSITION` means nothing
+has been laid out yet — the first submit — and is handled separately rather than
+being treated as "above the viewport".
 
 ### A transcode session is reaped while the lid is shut, and the failure is delayed
 
@@ -269,6 +318,23 @@ draws the Downloads library.
 The general rule this is an instance of: *a token must only ever be thrown away
 because a server said to.*
 
+### A message that covers the screen is a screen, and Back has to treat it as one
+
+`showTransientMessage` fills the content frame and is dismissed by the next key
+press, with that key **also doing its normal job**. That is right for the arrow
+keys — the remark is about an action, not a place — and it was wrong for Back in
+a way that read as a navigation bug.
+
+Choosing Subtitles on a file with no subtitle tracks says so, full screen. It
+looks like a page, so the way off it is Back, and Back both took the message
+down *and* left the details page: the user asked about *Ocean's Thirteen* and
+ended up in Movies, two levels from where they had been, with nothing on screen
+explaining the jump.
+
+Back is now consumed when it dismisses a transient message. Taking the remark
+down is a whole job for one key press, and every other key keeps the old
+behaviour.
+
 ### Kotlin block comments nest
 
 `/** ... /video/:/transcode/universal/* ... */` in a KDoc opens a **nested**
@@ -359,8 +425,10 @@ established that the dedicated back arrow reaches an app as an ordinary
 | **Right softkey** | **Options** — context menu for the focused row |
 | Back arrow | Up one level |
 | D-pad centre | Select |
-| D-pad ↑ at the top row | Step into the library view tabs |
-| D-pad ←/→ in a list | Page by ~7 rows, or step into the A-Z rail |
+| D-pad ↑ at the top row | Step into the tab strip, then into the `‹ Title` header |
+| **D-pad ← in a list** | **Up one level** — a second Back, for a phone whose back key may not outlive it |
+| D-pad → in a list | Page by ~7 rows, or step into the A-Z rail |
+| Digits in a list | The tab of that number, where the screen has tabs |
 | D-pad ←/→ in the player | Seek ∓15 s |
 | D-pad ↑/↓ in the player | Seek too, in whichever direction the rotation points them |
 | Volume rocker | Not ours. Passed to the system |
@@ -380,7 +448,7 @@ after their scope now — "Shuffle TV Shows" against "Shuffle this show".
 **And none of it is discoverable, so the app teaches it once.** The first launch
 opens the controls tour ahead of whatever it was going to show — including ahead
 of plex.tv/link, which already has to be navigated with keys nobody has been
-told about. Eleven steps on a drawing of the handset, one control lit at a time
+told about. Twelve steps on a drawing of the handset, one control lit at a time
 with a leader line to its name. See `keymap.md` for why the drawing is a canvas
 and not the reference PNG, and why `Store.tourSeen` is set on the way in rather
 than on the way out.
@@ -526,6 +594,56 @@ you a screen reading "Queen of Tears" six times with the one distinguishing
 detail in small print underneath. There, the season is the title and the episode
 count is the subtitle.
 
+## Settings is four tabs, and the colours are the continuity
+
+The same `TabStrip` the library views use, with `Playback · Downloads · Account
+· Help`. It replaced fifteen rows and four captions, and the captions were the
+problem twice over: as rows they were what the cursor had to skip, which is what
+put the highlight off the screen (see the scroll trap above), and as navigation
+they meant "Sign out" was two pages of scrolling past settings nobody was
+looking for. Every tab is now shorter than the screen, and a digit reaches one
+directly.
+
+`TabStrip` scrolls rather than dividing the width. Three tabs fitted in thirds;
+four do not, and dividing by however many there are ends in three ellipsised
+words that all read "Recomm…". The tabs keep their natural width, the current
+one is centred, and the rest run off both edges.
+
+**The accent colours are the same four, meaning the same four things**: blue is
+what the file already is, green is what reaches the screen, violet is storage on
+the phone, rose is subtitles. So Subtitles in Settings is rose because the
+subtitle picker on the details page is rose, and someone who has met one
+recognises the other as the same setting. Direct play is blue for a real reason
+rather than a spare one — it is the file arriving as it already is.
+
+## Mobile data is a three-way policy, not a switch
+
+`NetPolicy` is `WIFI_ONLY | ASK | ANY`, held separately for streaming and for
+downloads, because the right default is not the same for both:
+
+- **downloads default to `WIFI_ONLY`.** A download is a decision to spend a few
+  hundred megabytes at once, and the queue waiting for Wi-Fi *is* the feature;
+- **streaming defaults to `ASK`.** A phone that silently refuses to play
+  anything away from the house looks broken, and pressing Play is something
+  people do in the ten minutes before a train.
+
+Two things about where the question is asked. It is asked **before** the
+transcode is requested, or the server has already begun spending the data the
+panel is about — which is why `FlipActivity.startPlayback` wraps the intent
+rather than the player checking on the way up. And under `WIFI_ONLY` a download
+is still **queued**, not refused: `DownloadService` reaches the same check,
+logs it and stops, so the row starts by itself on the next Wi-Fi rather than
+having to be pressed again.
+
+A local copy is never guarded. The player prefers the file on disk, so the radio
+is not involved and a warning about mobile data would simply be untrue.
+
+`Net.Link` has three values for the same reason the policy does. `NONE` is not
+`METERED`: a queue with no network should wait exactly as it waits for Wi-Fi,
+but telling someone they are "on mobile data" when the phone has no connection
+at all is a dialog that is false, in front of a playback that was going to fail
+with a network error anyway.
+
 ## Shuffle is two requests, and never `sort=random`
 
 `PlexLibrary.randomInSection` asks for a single item purely to read the server's
@@ -669,7 +787,12 @@ those groups map straight onto the captioned rows the list already draws.
       feature, so the transcoder can be taken out of the path and the failure
       rate compared. Expect it to work on part of the library and fail on the
       rest: the MT6739 decodes HEVC only to 1600x960, so a 1080p HEVC source is
-      above what the chip will accept
+      above what the chip will accept. **Turning it on now asks first**, in a
+      panel naming the codecs, the ceiling and the reason everything is
+      converted — because an experiment that is expected to fail on part of any
+      library gets reported as a broken app if nobody says so beforehand. The
+      details page also stops predicting a quality preset that is no longer in
+      the path, and shows the file's own numbers on both sides of the arrow
 - [ ] Music, and the Now Playing screen from the art
 - [ ] **Autoplay next episode — and with it, shuffle as a *queue*.** Shuffle
       currently plays *one* random thing and stops at the end of it, because

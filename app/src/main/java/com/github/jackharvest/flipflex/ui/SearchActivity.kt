@@ -67,6 +67,7 @@ class SearchActivity : FlipActivity() {
     private lateinit var field: EditText
     private lateinit var list: RowList
     private lateinit var emptyState: TextView
+    private lateinit var tip: TextView
 
     private var searching: Job? = null
 
@@ -79,6 +80,7 @@ class SearchActivity : FlipActivity() {
         setBody(body)
         field = body.findViewById(R.id.search_field)
         emptyState = body.findViewById(R.id.search_message)
+        tip = body.findViewById(R.id.search_tip)
         list = RowList(this)
         // Under the empty-state text, which has to be able to cover it.
         body.findViewById<FrameLayout>(R.id.search_results).addView(list, 0)
@@ -124,6 +126,7 @@ class SearchActivity : FlipActivity() {
     private fun toField() {
         typing = true
         list.parked = true
+        tip.visibility = View.VISIBLE
         field.requestFocus()
         field.setSelection(field.text.length)
         getSystemService(InputMethodManager::class.java)
@@ -135,6 +138,9 @@ class SearchActivity : FlipActivity() {
         if (list.rows.isEmpty()) return
         typing = false
         list.parked = false
+        // Two more rows of results are worth more than advice about a keyboard
+        // that is no longer on screen.
+        tip.visibility = View.GONE
         // The IME covers most of a 320dp screen. Leaving it up while browsing
         // results would leave two rows visible out of seven.
         getSystemService(InputMethodManager::class.java)
@@ -273,7 +279,7 @@ class SearchActivity : FlipActivity() {
                 BrowseActivity.intent(this, BrowseActivity.MODE_CHILDREN, item.ratingKey, item.title)
             )
             store.showDetails -> startActivity(DetailActivity.intent(this, item.ratingKey, item.title))
-            else -> startActivity(
+            else -> startPlayback(
                 PlayerActivity.intent(
                     this,
                     ratingKey = item.ratingKey,
@@ -303,7 +309,7 @@ class SearchActivity : FlipActivity() {
         if (item != null && item.isPlayable) {
             add(
                 Option(if (item.inProgress) "Resume" else "Play") {
-                    startActivity(
+                    startPlayback(
                         PlayerActivity.intent(
                             this@SearchActivity,
                             ratingKey = item.ratingKey,
@@ -356,10 +362,13 @@ class SearchActivity : FlipActivity() {
             // is the only thing the key can sensibly mean.
             Action.UP -> list.move(-1) || run { toField(); true }
             Action.DOWN -> list.move(+1)
+            // Left is back everywhere in the app, and back here is the field,
+            // not the previous screen: the results belong to what is typed
+            // above them.
+            Action.LEFT, Action.BACK -> { toField(); true }
             Action.STAR -> list.move(-7)
-            Action.POUND -> list.move(+7)
+            Action.RIGHT, Action.POUND -> list.move(+7)
             Action.SELECT -> list.choose()
-            Action.BACK -> { toField(); true }
             else -> false
         }
     }

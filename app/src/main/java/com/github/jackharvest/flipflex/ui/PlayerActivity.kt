@@ -52,7 +52,14 @@ class PlayerActivity : FlipActivity() {
     companion object {
         private const val TAG = "FlipFlex/player"
 
-        private const val EXTRA_KEY = "ratingKey"
+        /**
+         * Not private, because [FlipActivity.startPlayback] reads it back off a
+         * built intent to decide whether this playback would come over the
+         * radio. Every screen in the app hands its player intent to that guard,
+         * so the alternative is passing the ratingKey twice at six call sites
+         * and having them disagree at one of them.
+         */
+        const val EXTRA_KEY = "ratingKey"
         private const val EXTRA_TITLE = "title"
         private const val EXTRA_SUBTITLE = "subtitle"
         private const val EXTRA_START = "startMs"

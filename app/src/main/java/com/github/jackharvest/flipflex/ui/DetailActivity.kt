@@ -48,6 +48,17 @@ import kotlinx.coroutines.launch
 class DetailActivity : FlipActivity() {
 
     companion object {
+        /**
+         * What the server actually sends, not what it was asked for.
+         *
+         * Measured rather than assumed: every path this app can request comes
+         * back two-channel, including from an 8-channel E-AC3 source, and
+         * neither `maxAudioChannels` nor a client profile extra moves it. HLS
+         * gives AAC; the single-file download path gives MP3, which is why
+         * [Downloads] does not reuse this.
+         */
+        private const val STREAM_AUDIO = "AAC Stereo"
+
         private const val EXTRA_KEY = "ratingKey"
         private const val EXTRA_TITLE = "title"
 
@@ -147,7 +158,13 @@ class DetailActivity : FlipActivity() {
         val saved = local?.state == Downloads.DONE
 
         val rows = buildList {
-            add(RowList.Row(title = factsLine(d), badges = badges(d, local), isBlurb = true))
+            add(
+                RowList.Row(
+                    title = factsLine(d),
+                    compare = comparison(d, local),
+                    isBlurb = true,
+                )
+            )
 
             if (item.isPlayable) {
                 add(RowList.Row(title = "PLAY", isHeader = true))
@@ -345,22 +362,43 @@ class DetailActivity : FlipActivity() {
     }
 
     /**
-     * What the file is, and what is about to reach the screen.
+     * What the file is, and what is about to reach the screen, side by side.
      *
-     * This was one line of dim grey text -- `1080p · HEVC · 5.5 Mbps → 320x240
-     * 800 kbps` -- sitting directly above a summary in the same dim grey, which
-     * made four separate facts into thirty characters of prose that nobody
-     * reads and nobody can scan. The colours do the work the punctuation was
-     * failing at, and they mean something: blue is what the file already is,
-     * green is what will actually be played, violet is the copy on the phone,
-     * rose is subtitles.
+     * ## Three versions of this, and why it ended up as two columns
      *
-     * A downloaded item reports its own numbers rather than the server's,
-     * because for that item they are different and the phone's are the true
-     * ones -- and because with the radio off they are the only ones there are.
+     * It began as one line of dim grey text -- `1080p · HEVC · 5.5 Mbps →
+     * 320x240 800 kbps` -- directly above a summary in the same dim grey, which
+     * made four separate facts into thirty characters of prose nobody reads.
+     * Badges fixed the reading: colour separates what punctuation could not, and
+     * the colours mean something fixed across the app -- blue is what the file
+     * already is, green is what will reach the screen, violet is the copy on the
+     * phone, rose is subtitles.
+     *
+     * What badges alone still did not say is that the second set is *produced
+     * from* the first. Seven chips in a row is a list of facts; two columns with
+     * an arrow is a sentence. That is [CompareStrip], and it is worth the extra
+     * view because this is the one screen whose job is to set expectations about
+     * a conversion that is about to happen.
+     *
+     * ## Why the audio is on both sides
+     *
+     * It is frequently the largest change and it was the one thing never shown.
+     * An 8-channel E-AC3 source comes back **2-channel** on every path this app
+     * can ask for -- measured, on both the HLS and the single-file paths, and
+     * not something any parameter moves. Somebody who plugs in headphones
+     * expecting surround should be able to see that before pressing Play, not
+     * deduce it afterwards.
+     *
+     * A downloaded item reports its own numbers rather than the preset's,
+     * because for that item they are facts about bytes on disk rather than a
+     * prediction -- and because with the radio off they are the only ones there
+     * are.
      */
-    private fun badges(d: PlexDetail.Detail, local: Downloads.Entry?): List<BadgeStrip.Badge> =
-        buildList {
+    private fun comparison(
+        d: PlexDetail.Detail,
+        local: Downloads.Entry?,
+    ): Pair<CompareStrip.Side, CompareStrip.Side> {
+        val source = buildList {
             if (d.sourceResolution.isNotEmpty()) {
                 add(BadgeStrip.Badge(d.sourceResolution, R.color.ff_badge_source))
             }
@@ -370,23 +408,53 @@ class DetailActivity : FlipActivity() {
             if (d.sourceBitrateKbps > 0) {
                 add(BadgeStrip.Badge(mbps(d.sourceBitrateKbps), R.color.ff_badge_source))
             }
-            if (local?.state == Downloads.DONE) {
-                add(BadgeStrip.Badge(Downloads.humanBytes(local.bytes), R.color.ff_badge_local))
-                if (local.resolution.isNotEmpty()) {
-                    add(BadgeStrip.Badge(local.resolution, R.color.ff_badge_target))
-                }
-                if (local.bitrateKbps > 0) {
-                    add(BadgeStrip.Badge(mbps(local.bitrateKbps), R.color.ff_badge_target))
-                }
-                if (local.subtitlesBurned) {
-                    add(BadgeStrip.Badge("Subtitles", R.color.ff_badge_subs))
-                }
-            } else if (d.item.isPlayable) {
-                val q = Quality.byId(store.quality)
-                add(BadgeStrip.Badge(q.resolution, R.color.ff_badge_target))
-                add(BadgeStrip.Badge(mbps(q.bitrate), R.color.ff_badge_target))
+            if (d.audioLine().isNotEmpty()) {
+                add(BadgeStrip.Badge(d.audioLine(), R.color.ff_badge_source))
             }
         }
+
+        if (local?.state == Downloads.DONE) {
+            return CompareStrip.Side("The file", source) to
+                CompareStrip.Side("On this phone", offlineBadges(local))
+        }
+
+        // Direct play asks the server to send the file as it is, so the honest
+        // right-hand column is the left-hand one over again -- in the colour
+        // that means "this is what reaches the screen". Printing the quality
+        // preset here would be printing a setting that is not in the path.
+        if (store.directPlay) {
+            return CompareStrip.Side("The file", source) to
+                CompareStrip.Side(
+                    "Direct play",
+                    source.map { BadgeStrip.Badge(it.text, R.color.ff_badge_target) },
+                )
+        }
+
+        val q = Quality.byId(store.quality)
+        val target = buildList {
+            add(BadgeStrip.Badge(q.resolution, R.color.ff_badge_target))
+            add(BadgeStrip.Badge(mbps(q.bitrate), R.color.ff_badge_target))
+            // AAC stereo is not a guess: it is what the server returns on the
+            // HLS path for every source we have measured, including 8-channel
+            // E-AC3. See the surround note in docs/phase2-playback.md.
+            add(BadgeStrip.Badge(STREAM_AUDIO, R.color.ff_badge_target))
+            if (subtitlesWillBurn(d)) {
+                add(BadgeStrip.Badge("Subtitles", R.color.ff_badge_subs))
+            }
+        }
+        return CompareStrip.Side("The file", source) to CompareStrip.Side("Plays as", target)
+    }
+
+    /**
+     * Whether pressing Play right now would burn subtitles in.
+     *
+     * The same rule [play] uses, and it has to be: a strip that promises
+     * subtitles and a playback that does not produce them is worse than showing
+     * nothing at all. Per item and off the server where there is a part to read,
+     * the global switch where there is not.
+     */
+    private fun subtitlesWillBurn(d: PlexDetail.Detail): Boolean =
+        if (d.partId.isNotEmpty()) d.selectedSubtitle != null else store.subtitles
 
     private fun mbps(kbps: Int): String =
         if (kbps >= 1000) "%.1f Mbps".format(kbps / 1000f) else "$kbps kbps"
@@ -457,6 +525,9 @@ class DetailActivity : FlipActivity() {
                     RowList.Row(
                         title = "Play",
                         payload = Act {
+                            // Local file, so no guard: startPlayback would let
+                            // it through anyway, and going through it here would
+                            // only be a way for the check to be wrong one day.
                             startActivity(
                                 PlayerActivity.intent(
                                     this@DetailActivity,
@@ -520,7 +591,7 @@ class DetailActivity : FlipActivity() {
     private fun play(item: PlexItem, resume: Boolean) {
         val d = detail
         val burn = if (d != null && d.partId.isNotEmpty()) d.selectedSubtitle != null else null
-        startActivity(
+        startPlayback(
             PlayerActivity.intent(
                 this,
                 ratingKey = item.ratingKey,
@@ -651,7 +722,7 @@ class DetailActivity : FlipActivity() {
 
     // ---- downloads ---------------------------------------------------------
 
-    private fun queue(item: PlexItem) {
+    private fun queue(item: PlexItem) = startDownload { waitsForWifi ->
         val q = Quality.byId(store.downloadQuality)
         // The subtitle decision is resolved here, once, and stored on the row.
         // It is burned into the picture by the transcoder, so it is a property
@@ -663,8 +734,12 @@ class DetailActivity : FlipActivity() {
             ?.let { it.selectedSubtitle != null }
             ?: store.subtitles
         val added = Downloads.add(this, Downloads.entryFor(item, q, burn, detail?.summary.orEmpty()))
+        // Started even when it will not run yet: the service reaches the same
+        // Wi-Fi check, logs it and stops, which costs nothing and keeps one
+        // decision in one place.
         if (added) DownloadService.start(this)
         reload()
+        if (added && waitsForWifi) showTransientMessage(getString(R.string.net_download_waiting))
     }
 
     /**
@@ -675,9 +750,9 @@ class DetailActivity : FlipActivity() {
      * Downloads library be browsed with the radio off, and it can only be done
      * while there is still a server to ask.
      */
-    private fun queueAll(item: PlexItem) {
-        val u = uri ?: return
-        val t = token ?: return
+    private fun queueAll(item: PlexItem) = startDownload { waitsForWifi ->
+        val u = uri ?: return@startDownload
+        val t = token ?: return@startDownload
         lifecycleScope.launch {
             setBusy(true)
             val eps = leaves ?: PlexLibrary.allLeaves(u, t, item.ratingKey)
@@ -699,7 +774,13 @@ class DetailActivity : FlipActivity() {
             }
             if (n > 0) DownloadService.start(this@DetailActivity)
             showTransientMessage(
-                if (n == 0) "Already queued." else "Queued $n episode${if (n == 1) "" else "s"}."
+                when {
+                    n == 0 -> "Already queued."
+                    waitsForWifi ->
+                        "Queued $n episode${if (n == 1) "" else "s"}.\n\n" +
+                            getString(R.string.net_download_waiting)
+                    else -> "Queued $n episode${if (n == 1) "" else "s"}."
+                }
             )
             reload()
         }
@@ -757,11 +838,22 @@ class DetailActivity : FlipActivity() {
 
     // ---- keys --------------------------------------------------------------
 
+    override fun onHeaderFocusChanged(on: Boolean) {
+        list.parked = on
+    }
+
     override fun onAction(action: Action, keyCode: Int): Boolean = when (action) {
-        Action.UP -> list.move(-1)
+        // Off the top of this list is the header, and OK there goes back to the
+        // season or the library this was opened from. There is no tab strip in
+        // between, so it is one press from the description.
+        Action.UP -> list.move(-1) || focusHeader(true)
         Action.DOWN -> list.move(+1)
+        // Left is up a level, the same as the back arrow, everywhere but the
+        // player. This page is the most likely place to want it: it is where
+        // you land from a list and where you go back to it from.
+        Action.LEFT -> { goUp(); true }
         Action.STAR -> list.move(-5)
-        Action.POUND -> list.move(+5)
+        Action.RIGHT, Action.POUND -> list.move(+5)
         Action.SELECT -> if (list.rows.isEmpty()) { load(); true } else list.choose()
         else -> false
     }

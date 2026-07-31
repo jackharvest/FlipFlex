@@ -7,14 +7,14 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import android.os.IBinder
 import android.util.Log
 import com.github.jackharvest.flipflex.R
 import com.github.jackharvest.flipflex.plex.PlexClient
 import com.github.jackharvest.flipflex.plex.PlexPlayback
 import com.github.jackharvest.flipflex.plex.Quality
+import com.github.jackharvest.flipflex.store.Net
+import com.github.jackharvest.flipflex.store.NetPolicy
 import com.github.jackharvest.flipflex.store.Store
 import com.github.jackharvest.flipflex.ui.SplashActivity
 import kotlinx.coroutines.CoroutineScope
@@ -122,7 +122,11 @@ class DownloadService : Service() {
         while (true) {
             val entry = Downloads.nextQueued(this) ?: break
 
-            if (store.downloadWifiOnly && !onUnmeteredNetwork()) {
+            // Only WIFI_ONLY holds the queue. Under ASK the user has already been
+            // asked -- at the moment they pressed Download, on the screen they
+            // were looking at -- and refusing here would make that answer count
+            // for nothing.
+            if (store.downloadNetwork == NetPolicy.WIFI_ONLY && !Net.unmetered(this)) {
                 // Left queued rather than failed. The user has not done anything
                 // wrong and the download should simply happen when they are next
                 // on Wi-Fi; marking it failed would make them queue it twice.
@@ -282,19 +286,6 @@ class DownloadService : Service() {
             Downloads.setState(this, entry.ratingKey, Downloads.FAILED, 0)
             Log.w(TAG, "FAILED ${entry.title} after ${Downloads.humanBytes(written)}")
         }
-    }
-
-    /**
-     * Wi-Fi, or anything else the system considers unmetered.
-     *
-     * NOT_METERED rather than TRANSPORT_WIFI, because a metered hotspot is a
-     * phone plan wearing a Wi-Fi hat and the whole point of the setting is not
-     * to spend somebody's data allowance on a film.
-     */
-    private fun onUnmeteredNetwork(): Boolean {
-        val cm = getSystemService(ConnectivityManager::class.java) ?: return false
-        val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
-        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
     }
 
     // ---- notification ------------------------------------------------------

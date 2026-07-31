@@ -199,15 +199,35 @@ class Store(context: Context) {
         set(v) = prefs.edit().putString(K_DL_QUALITY, v).apply()
 
     /**
-     * Refuse to start a download on mobile data.
+     * What a download may do on mobile data. One of [NetPolicy].
      *
-     * On by default, and the default matters more here than on a tablet: this
-     * is a phone with a real SIM in it, and a film at 320 kbps is still a few
-     * hundred megabytes of somebody's plan.
+     * [NetPolicy.WIFI_ONLY] by default, and the default matters more here than
+     * on a tablet: this is a phone with a real SIM in it, and a film at 320 kbps
+     * is still a few hundred megabytes of somebody's plan.
+     *
+     * This was a Boolean until streaming needed the same setting, and the
+     * Boolean is still read as the migration: someone who had turned Wi-Fi only
+     * off keeps it off rather than silently getting it back.
      */
-    var downloadWifiOnly: Boolean
-        get() = prefs.getBoolean(K_DL_WIFI_ONLY, true)
-        set(v) = prefs.edit().putBoolean(K_DL_WIFI_ONLY, v).apply()
+    var downloadNetwork: String
+        get() = prefs.getString(K_DL_NETWORK, null)?.ifEmpty { null }
+            ?: if (prefs.getBoolean(K_DL_WIFI_ONLY, true)) NetPolicy.WIFI_ONLY else NetPolicy.ANY
+        set(v) = prefs.edit().putString(K_DL_NETWORK, v).apply()
+
+    /**
+     * The same question for streaming, and it gets a different answer.
+     *
+     * [NetPolicy.ASK] by default. A download is a decision to spend a few
+     * hundred megabytes at once, so refusing outright is the kind default;
+     * pressing Play is something people do in the ten minutes before a train,
+     * and a phone that simply refuses there is a phone that looks broken. So the
+     * default warns, once, per playback -- which is the only thing that makes
+     * "off" a defensible option for anyone who really never wants LTE spent on
+     * video.
+     */
+    var streamNetwork: String
+        get() = prefs.getString(K_STREAM_NETWORK, null)?.ifEmpty { null } ?: NetPolicy.ASK
+        set(v) = prefs.edit().putString(K_STREAM_NETWORK, v).apply()
 
     /**
      * Delete a download once it has been watched to the end.
@@ -336,6 +356,8 @@ class Store(context: Context) {
         const val K_DIRECT_PLAY = "direct_play"
         const val K_DL_QUALITY = "dl_quality"
         const val K_DL_WIFI_ONLY = "dl_wifi_only"
+        const val K_DL_NETWORK = "dl_network"
+        const val K_STREAM_NETWORK = "stream_network"
         const val K_DL_DELETE_WATCHED = "dl_delete_watched"
         const val K_TOUR_SEEN = "tour_seen"
     }

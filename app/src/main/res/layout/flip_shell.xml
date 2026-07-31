@@ -112,6 +112,22 @@
                     android:textColor="@color/ff_text_dim"
                     android:textSize="10sp" />
 
+                <!-- The reason, for the two questions that have one: turning
+                     direct play on, and streaming over mobile data. Wraps,
+                     unlike the title above it, because a warning that has to
+                     fit on one line is a warning that says nothing. Gone for
+                     an ordinary Options menu, which costs it no pixels. -->
+                <TextView
+                    android:id="@+id/options_note"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingHorizontal="8dp"
+                    android:paddingBottom="5dp"
+                    android:lineSpacingExtra="1dp"
+                    android:textColor="@color/ff_text_dim"
+                    android:textSize="10sp"
+                    android:visibility="gone" />
+
                 <View
                     android:layout_width="match_parent"
                     android:layout_height="1dp"

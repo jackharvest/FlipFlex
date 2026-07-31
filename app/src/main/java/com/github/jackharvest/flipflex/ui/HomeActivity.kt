@@ -169,19 +169,13 @@ class HomeActivity : FlipActivity() {
                     )
                 )
             }
-            // Below the libraries, because it is about them and because a row
-            // that is pressed once a year must not sit above the ones pressed
-            // every day. Hidden with fewer than two libraries, where it would be
-            // a control with nothing to do.
-            if (shownSections.size > 1) {
-                add(
-                    RowList.Row(
-                        title = getString(R.string.home_reorder),
-                        subtitle = getString(R.string.home_reorder_note),
-                        payload = Dest.Reorder,
-                    )
-                )
-            }
+            // Reordering is *not* a row here, though it was one. It is a thing
+            // people do once, in the week they install the app, and a permanent
+            // row for it sat on the shortest list in the app -- above Settings,
+            // below the libraries, in the way every single day. It is in the
+            // Options menu on the library it acts on, which is both where it
+            // belongs and where somebody annoyed by the current order will
+            // press first.
             add(RowList.Row(title = getString(R.string.home_settings), payload = Dest.Settings))
         }
         list.submit(rows, keepSelection = true)
@@ -305,7 +299,7 @@ class HomeActivity : FlipActivity() {
                 showTransientMessage("Nothing to shuffle in\n${section.title}.")
                 return@launch
             }
-            startActivity(
+            startPlayback(
                 PlayerActivity.intent(
                     this@HomeActivity,
                     ratingKey = item.ratingKey,

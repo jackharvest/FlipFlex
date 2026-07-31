@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A tab strip with a list under it. Settings uses this; browse_body has the
+     same two bands plus an A-Z rail.
+
+     The strip replaces the captions that used to run down the settings list.
+     Fifteen rows with four captions among them is a screen you scroll rather
+     than read, and the captions made the scrolling worse rather than better —
+     they are the rows the cursor has to skip, which is what put the highlight
+     off the bottom of the screen when it crossed one. Four short lists, one per
+     tab, is the same content with nothing to page past. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <com.github.jackharvest.flipflex.ui.TabStrip
+        android:id="@+id/body_tabs"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/ff_rule" />
+
+    <FrameLayout
+        android:id="@+id/body_list_holder"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+</LinearLayout>

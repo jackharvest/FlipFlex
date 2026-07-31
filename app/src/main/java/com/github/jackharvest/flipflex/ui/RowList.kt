@@ -84,6 +84,11 @@ class RowList(context: Context) : RecyclerView(context) {
         val accent: Int = 0,
         /** Coloured facts drawn under the title. See [BadgeStrip]. */
         val badges: List<BadgeStrip.Badge> = emptyList(),
+        /**
+         * The same kind of facts, but as a before and after with an arrow
+         * between them. Only the details page sets it. See [CompareStrip].
+         */
+        val compare: Pair<CompareStrip.Side, CompareStrip.Side>? = null,
     )
 
     var rows: List<Row> = emptyList()
@@ -227,31 +232,64 @@ class RowList(context: Context) : RecyclerView(context) {
      * Put the cursor's row on screen, showing whatever sits above it if that is
      * everything above it.
      *
-     * The two cases are different exactly when a list opens with captions or
-     * prose: the cursor lands on the first row it *can* land on, and scrolling
-     * to that pushes everything above it off the top. It cost the grouped
-     * Settings list its first "PLAYBACK" caption and the details page its
-     * entire description -- on the one screen whose job is to show you a
-     * description.
+     * ## The rule, and the bug it replaces
      *
-     * Worth being precise about why this is checked on **every** move and not
-     * only on submit. `scrollToPosition` pins its target to the top of the
-     * viewport, so once the cursor had moved down and come back to the first
-     * selectable row, the rows above it stayed off screen for good: there was
-     * no key that would ever show the summary again, which is exactly how it
-     * was reported. Anchoring at 0 whenever nothing selectable is above the
-     * cursor makes going back up the list undo going down it.
+     * **The selected row is on screen. Always. Nothing else is negotiable.**
+     *
+     * The previous version chose a single anchor row and scrolled to it, and one
+     * of its three cases could pick a row that was *not* the cursor: entering a
+     * new group, it anchored on the caption above the cursor so the caption
+     * would be visible. But `scrollToPosition` is a minimal scroll -- a target
+     * already fully on screen moves nothing at all -- so a caption sitting on
+     * the last visible line left the row underneath it, the selected one, just
+     * off the bottom. The amber bar was then somewhere below the viewport with
+     * no indication of where, which is exactly the "the highlight disappears
+     * when I cross a heading" report. Settings reproduced it at every caption,
+     * because its groups are three to five rows apart.
+     *
+     * So the cases are ordered by what they are allowed to do rather than by
+     * which row they name:
+     *
+     * - everything above the cursor is unselectable -- the details page's
+     *   summary, the first caption of a grouped list -- so pin the list to the
+     *   top and show it. The cursor cannot be off screen here; there is nothing
+     *   above it but a screenful at most;
+     * - the cursor is above the viewport, so bring it to the top, taking its
+     *   caption with it when it has one;
+     * - the cursor is below the viewport, so bring it to the bottom. The caption
+     *   is not consulted: it is one line and it will usually follow, and where
+     *   it does not, a visible cursor beats a visible label;
+     * - otherwise the cursor is already on screen and the list holds still.
+     *
+     * That last case is also what stops the list twitching under a held key.
      */
     private fun scrollToCursor() {
-        val anchor = when {
-            rows.take(selected).all { it.isHeader || it.isBlurb } -> 0
-            rows.getOrNull(selected - 1)?.isHeader == true -> selected - 1
-            else -> selected
+        val lm = layoutManager as LinearLayoutManager
+
+        // scrollToPosition/WithOffset rather than smoothScroll throughout: on a
+        // 2.4" list the animation is longer than the gap between two D-pad
+        // presses when someone holds the key down, and the list visibly lags
+        // behind the cursor.
+        if (rows.take(selected).all { it.isHeader || it.isBlurb }) {
+            lm.scrollToPositionWithOffset(0, 0)
+            return
         }
-        // scrollToPosition, not smoothScroll: on a 2.4" list the animation is
-        // longer than the gap between two D-pad presses when someone holds the
-        // key down, and the list visibly lags behind the cursor.
-        (layoutManager as LinearLayoutManager).scrollToPosition(anchor)
+
+        val first = lm.findFirstCompletelyVisibleItemPosition()
+        val last = lm.findLastCompletelyVisibleItemPosition()
+        // No layout yet -- the first submit, or a rebuild while off screen.
+        // There is nothing measured to compare against, so just ask for it.
+        if (first == NO_POSITION || last == NO_POSITION) {
+            lm.scrollToPosition(selected)
+            return
+        }
+
+        val lead = if (rows.getOrNull(selected - 1)?.isHeader == true) selected - 1 else selected
+        when {
+            lead < first -> lm.scrollToPositionWithOffset(lead, 0)
+            selected > last -> lm.scrollToPosition(selected)
+            else -> Unit
+        }
     }
 
     /** The next index in [dir] that is not a caption, or null if there is none. */
@@ -349,6 +387,7 @@ class RowList(context: Context) : RecyclerView(context) {
         private val time: TextView = view.findViewById(R.id.row_time)
         private val secondLine: View = view.findViewById(R.id.row_second_line)
         private val badges: BadgeStrip = view.findViewById(R.id.row_badges)
+        private val compare: CompareStrip = view.findViewById(R.id.row_compare)
         private val progress: ProgressBar = view.findViewById(R.id.row_progress)
 
         fun bind(row: Row, isSelected: Boolean) {
@@ -358,6 +397,10 @@ class RowList(context: Context) : RecyclerView(context) {
             if (!wiggling) settle(itemView)
 
             accent.visibility = View.GONE
+            // Reset before the branch, not inside it: a recycled holder that was
+            // the details page's compare row would otherwise carry the strip
+            // down into an ordinary title row further down the same list.
+            compare.visibility = View.GONE
             if (row.isBlurb) {
                 bindBlurb(row)
                 return
@@ -458,15 +501,23 @@ class RowList(context: Context) : RecyclerView(context) {
             trailing.text = ""
             secondLine.visibility = View.GONE
             progress.visibility = View.GONE
-            // A blurb row is also how the details page carries its badges, so
-            // the facts can sit above the prose without spending a selectable
-            // row on them.
+            // A blurb row is also how the details page carries its facts, so
+            // they can sit above the prose without spending a selectable row on
+            // them -- as a flat strip of badges, or as the before-and-after.
             if (row.badges.isEmpty()) {
                 badges.visibility = View.GONE
             } else {
                 badges.visibility = View.VISIBLE
                 badges.setBadges(row.badges)
             }
+            row.compare?.let { (left, right) ->
+                compare.visibility = View.VISIBLE
+                compare.setSides(left, right)
+            }
+            // An empty title on a compare row must not leave a blank line above
+            // the columns; the facts line is genuinely empty for a film with no
+            // year and no rating.
+            title.visibility = if (row.title.isEmpty()) View.GONE else View.VISIBLE
         }
 
         /**
@@ -496,6 +547,9 @@ class RowList(context: Context) : RecyclerView(context) {
         private fun oneLine() {
             title.maxLines = 1
             title.ellipsize = android.text.TextUtils.TruncateAt.END
+            // A blurb with nothing but a compare strip hides its title, and a
+            // recycled holder would carry that hiding into a real row.
+            title.visibility = View.VISIBLE
         }
 
         private fun selectionColor(): Int =

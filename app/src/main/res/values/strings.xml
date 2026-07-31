@@ -20,9 +20,12 @@
 
     <!-- Reorder mode. The help line has to name both jobs of the OK key,
          because OK meaning "pick up" and then "put down" is the one thing about
-         this mode that cannot be guessed from looking at it. -->
+         this mode that cannot be guessed from looking at it.
+
+         There is no home_reorder_note any more: reordering had a row of its own
+         on the home screen as well as an entry in the Options menu, which spent
+         a permanent row on something done once a year. -->
     <string name="home_reorder">Reorder libraries</string>
-    <string name="home_reorder_note">Choose what sits where</string>
     <string name="home_reorder_help">OK picks a library up.\nUp and down move it.\nOK puts it back down.\n\nDone when you have finished.</string>
 
     <string name="downloads_empty">Nothing downloaded yet.\n\nOpen anything and choose\nDownload to keep a copy\non this phone.</string>
@@ -34,11 +37,46 @@
     <string name="search_hint">Type a title</string>
     <string name="search_prompt">Type at least two letters.\n\nThe green call key opens\nthis from anywhere.</string>
 
+    <!-- The T9 tip, on the search screen only.
+         Whether the IME is already in predictive mode is not something an app
+         can read — the mode lives inside com.iqqijni.dvt912key and is not
+         exposed — so this is shown to everyone rather than only to the people
+         who need it. It is a dim line at the bottom of a screen whose keyboard
+         covers the rest, which is the cost of not being able to ask. -->
+    <string name="search_t9_tip">Tip: press # until the screen shows EN KT9. Predictive text is much faster than tapping letters out.</string>
+
     <!-- The three library views, as Plex names them. Kept short: three of them
          share a 240dp row, so ~13 characters each is the whole budget. -->
     <string name="tab_recommended">Recommended</string>
     <string name="tab_library">Library</string>
     <string name="tab_categories">Categories</string>
+
+    <!-- Settings' groups, which are tabs rather than captions in the list.
+         Shorter than the captions they replace ("PLAYBACK", "DOWNLOADS") for no
+         reason other than width: four of these share the strip. -->
+    <string name="settings_tab_playback">Playback</string>
+    <string name="settings_tab_downloads">Downloads</string>
+    <string name="settings_tab_account">Account</string>
+    <string name="settings_tab_help">Help</string>
+
+    <!-- Mobile data. Both notes say what it will cost rather than that it will
+         cost something, because "this may use mobile data" is a sentence people
+         have learned to press through without reading. -->
+    <string name="net_stream_title">Stream over mobile data?</string>
+    <string name="net_stream_note">You are not on Wi-Fi. Streaming spends about 6 MB a minute at Standard quality — roughly 360 MB an hour.\n\nSettings · Playback · Wi-Fi only decides whether this is asked.</string>
+    <string name="net_stream_go">Play anyway</string>
+    <string name="net_stream_blocked">Wi-Fi only is on, so this will not stream on mobile data.\n\nSettings · Playback · Wi-Fi only</string>
+    <string name="net_download_title">Download on mobile data?</string>
+    <string name="net_download_note">You are not on Wi-Fi. A 45-minute episode is about 500 MB at the High preset.\n\nSettings · Downloads · Wi-Fi only decides whether this is asked.</string>
+    <string name="net_download_go">Download anyway</string>
+    <string name="net_download_waiting">Queued. It will download by itself the next time you are on Wi-Fi.</string>
+
+    <!-- Direct play. The warning is the feature: this is an experiment that is
+         expected to fail on part of any library, and someone who turns it on
+         without knowing that reports it as a broken app. -->
+    <string name="direct_play_title">Try direct play?</string>
+    <string name="direct_play_go">Turn it on</string>
+    <string name="direct_play_note">This chip decodes H.264, HEVC, VP9, MPEG-2, MPEG-4 and VC-1, all only up to 1600x960. A file above that size, or in anything else, will not play at all.\n\nFlipFlex normally has the server convert everything, so that every file in your library behaves the same way. This turns that off to see what the phone can manage on its own — expect some things to fail.</string>
 
     <string name="msg_loading">Loading…</string>
     <string name="msg_empty">Nothing here.</string>

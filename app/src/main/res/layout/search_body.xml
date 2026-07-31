@@ -51,4 +51,26 @@
             android:textSize="11sp"
             android:visibility="gone" />
     </FrameLayout>
+
+    <!-- The T9 tip. Sits at the bottom of the screen, under the results, and
+         only while the field has the cursor — where the IME is covering most of
+         what is above it anyway, so the two lines cost nothing that was being
+         looked at. It goes away the moment the cursor moves into the results,
+         because by then the advice has either been taken or is too late.
+
+         Whether predictive mode is already on is not readable from an app: the
+         mode belongs to com.iqqijni.dvt912key and is not exposed anywhere. So
+         this is shown to everybody, phrased as a tip rather than as something
+         that needs acknowledging. -->
+    <TextView
+        android:id="@+id/search_tip"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/ff_surface"
+        android:paddingHorizontal="8dp"
+        android:paddingVertical="3dp"
+        android:lineSpacingExtra="1dp"
+        android:text="@string/search_t9_tip"
+        android:textColor="@color/ff_text_dim"
+        android:textSize="9sp" />
 </LinearLayout>

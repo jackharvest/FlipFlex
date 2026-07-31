@@ -17,6 +17,12 @@ report position → tear down, on the real handset against a real server.**
 **Phase 3 adds the details page, subtitles, quality, search and downloads —
 including offline playback with both radios switched off.**
 
+Navigation has two rules that are not obvious from the code and are load-bearing
+for everything else: **left is a second Back** on every screen but the player,
+and **up walks list → tab strip → the `‹ Title` header**, where OK also goes up
+a level. Both exist because the back arrow is one small mechanical key and
+neither soft key is Back. Digits pick a tab by number. See `docs/keymap.md`.
+
 **The package is `com.github.jackharvest.flipflex`.** It was
 `io.github.jackharvest.flipflex` until the launcher work, and the rename is not
 cosmetic: TCL's Launcher3 only treats an entry as a package name if it starts
@@ -133,6 +139,23 @@ E-AC-3 source comes back **2-channel** on both paths — AAC stereo over HLS
 under `Android`, MP3 stereo over `start.mkv` under `Chrome`. `maxAudioChannels`,
 `audioChannelCount` and a `X-Plex-Client-Profile-Extra` channel limitation all
 made no difference because there was nothing to change.
+
+**A minimal scroll can leave the cursor off screen, and a caption is what
+triggers it.** `RowList.scrollToCursor` used to pick one anchor row, and for the
+first row of a group it picked the *caption above it* so the caption would stay
+visible. `scrollToPosition` does not move a list whose target is already
+visible, so a caption on the last visible line meant no scroll at all and the
+selected row sat just below the viewport — the amber bar simply gone, most
+visibly in Settings, which has a caption every four rows. The rule is now that
+the selected row is always on screen and the caption is a preference that only
+applies going *up*. Do not reintroduce an anchor that is not the cursor.
+
+**A full-screen transient message is a screen, and Back must only dismiss it.**
+`showTransientMessage` covers the content frame and the next key takes it down
+while still doing its own job — right for the arrow keys, wrong for Back, which
+dismissed the message *and* left the activity. Reported as: Subtitles on a file
+with no subtitle tracks, then Back, landing two levels up in the library. Back
+is consumed when it clears a transient message.
 
 **A failed network call is not a rejected login.** `PlexAuth.validate` used to
 return `String?`, where null meant both "plex.tv refused this token" and "plex.tv

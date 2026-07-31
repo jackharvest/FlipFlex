@@ -94,6 +94,15 @@
             android:layout_height="wrap_content"
             android:visibility="gone" />
 
+        <!-- The same facts as two columns with an arrow between them, for the
+             details page: what the file is, and what will actually play. Only
+             ever set on a blurb row, and gone everywhere else. -->
+        <com.github.jackharvest.flipflex.ui.CompareStrip
+            android:id="@+id/row_compare"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="gone" />
+
         <!-- Resume progress. Shown only for part-watched items, so a fresh library
              list is not a wall of empty grey bars. -->
         <ProgressBar

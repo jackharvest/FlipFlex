@@ -32,6 +32,18 @@ object PlexDetail {
         val sourceResolution: String,
         val sourceBitrateKbps: Int,
         val videoCodec: String,
+        /**
+         * "eac3", "aac", "dca" -- the audio the file already carries.
+         *
+         * Read for the details page's before-and-after, and worth having for a
+         * reason particular to this device: an 8-channel E-AC-3 source comes
+         * back as 2-channel stereo on *every* path we can ask for, so the audio
+         * is very often the biggest difference between the file and what the
+         * handset will hear. A page that showed the video conversion and said
+         * nothing about the audio was showing half the answer.
+         */
+        val audioCodec: String,
+        val audioChannels: Int,
         val container: String,
         /**
          * The part id, which is what a subtitle or audio choice is applied to.
@@ -60,6 +72,18 @@ object PlexDetail {
 
         val selectedSubtitle: Track? get() = subtitles.firstOrNull { it.selected }
         val selectedAudio: Track? get() = audio.firstOrNull { it.selected }
+
+        /**
+         * "E-AC3 5.1", or as much of it as the server said.
+         *
+         * The channel count is spelled the way a film's box does -- 5.1, 7.1,
+         * Stereo, Mono -- rather than as a bare number, because "6" next to a
+         * codec name reads as a version number.
+         */
+        fun audioLine(): String = listOf(
+            audioCodec.uppercase().replace("EAC3", "E-AC3"),
+            channelLabel(audioChannels),
+        ).filter { it.isNotEmpty() }.joinToString(" ")
     }
 
     suspend fun fetch(uri: String, token: String, ratingKey: String): Detail? {
@@ -98,11 +122,24 @@ object PlexDetail {
             sourceResolution = resolutionLabel(media),
             sourceBitrateKbps = media?.optInt("bitrate", 0) ?: 0,
             videoCodec = media?.str("videoCodec").orEmpty(),
+            audioCodec = media?.str("audioCodec").orEmpty(),
+            audioChannels = media?.optInt("audioChannels", 0) ?: 0,
             container = media?.str("container").orEmpty(),
             partId = part?.str("id").orEmpty(),
             audio = tracks(2),
             subtitles = tracks(3),
         )
+    }
+
+    /** How a person says a channel count. Empty when the server did not say. */
+    fun channelLabel(channels: Int): String = when {
+        channels <= 0 -> ""
+        channels == 1 -> "Mono"
+        channels == 2 -> "Stereo"
+        // 6 is 5.1 and 8 is 7.1: five speakers plus a subwoofer, seven plus one.
+        // Odd counts are rare enough to print honestly rather than guess at.
+        channels % 2 == 0 -> "${channels - 1}.1"
+        else -> "${channels}ch"
     }
 
     /**
