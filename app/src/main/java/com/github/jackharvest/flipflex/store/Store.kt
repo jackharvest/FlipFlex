@@ -75,6 +75,27 @@ class Store(context: Context) {
     }
 
     /**
+     * The order the user dragged the libraries into on the home screen.
+     *
+     * A **list**, not a map of positions, because the two disagree the moment
+     * the server gains or loses a library and only one of them degrades well:
+     * anything not named here keeps its server order and lands after everything
+     * that is. So a new library appears at the bottom rather than displacing a
+     * carefully arranged list, and a deleted one leaves no hole.
+     *
+     * Stored as one string with a separator that cannot occur in a section key
+     * -- Plex's keys are decimal integers. `getStringSet` would have been the
+     * obvious type and is exactly wrong: a Set does not keep order, which is
+     * the only thing this value is for.
+     */
+    var sectionOrder: List<String>
+        get() = prefs.getString(K_SECTION_ORDER, null)
+            ?.split(ORDER_SEPARATOR)
+            ?.filter { it.isNotEmpty() }
+            ?: emptyList()
+        set(v) = prefs.edit().putString(K_SECTION_ORDER, v.joinToString(ORDER_SEPARATOR)).apply()
+
+    /**
      * Which way the player screen is turned. See `PlayerActivity.ORIENT_*`.
      *
      * Null means "never chosen", and the player picks its own default -- the
@@ -118,6 +139,26 @@ class Store(context: Context) {
     var subtitleSize: Int
         get() = prefs.getInt(K_SUBTITLE_SIZE, 125)
         set(v) = prefs.edit().putInt(K_SUBTITLE_SIZE, v).apply()
+
+    /**
+     * Ask the server to send the file as it is, instead of transcoding it.
+     *
+     * Off, and an experiment rather than a feature. It exists because the
+     * obvious suspect for a stream that dies partway through a busy evening is
+     * the server's transcoder, and the only way to test that from here is to
+     * take the transcoder out of the path and see whether the failures stop.
+     *
+     * It is not a general improvement and should not be made one without
+     * evidence. The panel is 240 wide, so direct play pulls a 1080p file across
+     * the radio to draw it into 320x180 -- more bandwidth and more battery for
+     * the same picture. Worse, the MT6739 decodes HEVC only up to 1600x960, so
+     * a 1080p HEVC source is above what the chip will accept and simply will
+     * not play. Expect this to work on some of the library and fail on the rest;
+     * that is what makes it a diagnostic and not a setting.
+     */
+    var directPlay: Boolean
+        get() = prefs.getBoolean(K_DIRECT_PLAY, false)
+        set(v) = prefs.edit().putBoolean(K_DIRECT_PLAY, v).apply()
 
     /**
      * Whether choosing something opens its details page or starts it playing.
@@ -253,6 +294,7 @@ class Store(context: Context) {
     }
 
     private companion object {
+        const val ORDER_SEPARATOR = ","
         const val K_CLIENT_ID = "client_id"
         const val K_TOKEN = "token"
         const val K_SERVER_URI = "server_uri"
@@ -267,10 +309,12 @@ class Store(context: Context) {
         const val K_PROFILE_NAME = "profile_name"
         const val K_HIDDEN_SECTIONS = "hidden_sections"
         const val K_PLAYER_ORIENTATION = "player_orientation"
+        const val K_SECTION_ORDER = "section_order"
         const val K_QUALITY = "quality"
         const val K_SUBTITLES = "subtitles"
         const val K_SUBTITLE_SIZE = "subtitle_size"
         const val K_SHOW_DETAILS = "show_details"
+        const val K_DIRECT_PLAY = "direct_play"
         const val K_DL_QUALITY = "dl_quality"
         const val K_DL_WIFI_ONLY = "dl_wifi_only"
         const val K_DL_DELETE_WATCHED = "dl_delete_watched"

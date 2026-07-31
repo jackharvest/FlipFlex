@@ -59,7 +59,129 @@ Round two of feedback, measured the same way on 2026-07-30:
 | Seasons | Header *2 Stupid Dogs*, row *Season 1 · 13 episodes* — no repetition |
 | Sign out | Confirm panel, Cancel default; cancelling leaves the token in prefs |
 
+Round four of feedback, measured the same way on 2026-07-30. Reorder, seekable
+downloads, badges, and the two playback failures:
+
+| Step | Evidence |
+|---|---|
+| Reorder | Home row → the library list rocks; OK lifts *Movies*, ↓↓ carries it below *TV Shows*, OK drops it, Done. The new order survives a force-stop |
+| Download seeking, before | Six presses of forward on a downloaded episode left the clock at **0:01** and restarted the picture each time |
+| Cues index | 250 cue points, 6.7 kB, spliced ahead of the first cluster; `ffmpeg -ss 900` on the result decodes immediately |
+| Downloaded item page | Badges `480p` `MSMPEG4V3` `2.1 Mbps` `53 MB`; no quality or subtitle picker; "ON THIS PHONE" and Delete |
+| Download quality | Picker on the details page, opens on High with a tick; default moved to 480x360 |
+| Accented rows | Subtitles rose, Streaming quality green, Download quality violet, all with a leading stripe |
+| Session reaped | Five minutes paused → `/status/sessions` shows FlipFlex playing with **no transcode session**; playback then ran on for minutes and died with `ERROR_CODE_IO_BAD_HTTP_STATUS` |
+| Surround | An 8-channel E-AC-3 source comes back **2-channel** on both paths already — no parameter needed |
+
 ## The traps, in the order they cost time
+
+### A downloaded file cannot be seeked, and the reason is a missing index
+
+`start.mkv` is muxed **live**, straight into the socket. A live Matroska muxer
+cannot go back and fill anything in, so what lands has a Segment of unknown
+size (`01 FF FF FF FF FF FF FF`) and **no Cues element**. Cues is the cluster
+index; a muxer can only write it once it knows where every cluster ended up.
+
+ExoPlayer's `MatroskaExtractor` builds its seek map from Cues and from nothing
+else. With none present it publishes `SeekMap.Unseekable`, and every `seekTo`
+then collapses to the only seek point there is: **zero**. On the handset that
+looks like six presses of the forward key leaving the clock at 0:01 and the
+picture restarting — a seek that goes backwards, not one that does nothing.
+
+Three ways out were measured before the fourth was written:
+
+| Idea | Why not |
+|---|---|
+| Ask Plex for a seekable container | It ignores the extension. `start.mp4` and `start.ts` both return **Matroska**, byte-identical in size to `start.mkv` |
+| Remux to MP4 with `MediaMuxer` | The audio comes back **MP3** from every profile that serves a single file — Chrome, Safari, Roku, Chromecast all the same, and `X-Plex-Client-Profile-Extra` does not move it. `MediaMuxer` cannot write MP3 into MP4 |
+| Download HLS and keep the segments | Would work — the child playlist is full VOD, all 174 segments listed up front — but it rewrites the whole download path |
+
+So FlipFlex writes the index itself. `dl/MatroskaIndex.kt` walks the top level
+once, collects a cue point every five seconds, and rewrites the file with Cues
+spliced in **ahead of the first cluster**. Ahead, because the extractor parses
+forwards and never follows the SeekHead, so an index at the end of the file is
+one it reads after it no longer needs it.
+
+Two things make this cheap and safe. Every cluster in what the transcoder
+produces has a **known size**, so the walk is arithmetic rather than a scan for
+the next cluster id — verified on a real download, 1733 of them, all sized.
+And the clusters are copied byte for byte, so nothing is re-encoded and a
+failure leaves the original in place, playable and merely unseekable.
+
+The one arithmetic trap is that `CueClusterPosition` is an offset from the
+start of the Segment's data, and inserting the index *moves every cluster*. The
+positions therefore have to be written with the length of the index already
+added — and the length depends on the positions. `CueTime` and
+`CueClusterPosition` are written as **fixed eight-byte integers** to break that
+circle: the encoded size then depends only on the number of cue points, so the
+index can be built once to measure and again with the shift applied. There is
+an assertion that the two agree; do not remove it.
+
+### A transcode session is reaped while the lid is shut, and the failure is delayed
+
+This is the "it plays a bit and then says 400" report, and looking at the
+moment of the error tells you nothing about it.
+
+A transcode session is kept alive by segment requests. Pause — which on this
+handset means the lid is shut, the single most common thing that happens to it
+— stops those, and Plex eventually reaps the session. But it leaves the
+segments it had already produced. So playback **resumes perfectly**, runs on
+for however many minutes the transcoder had got ahead, and only then reaches
+the first segment that was never written.
+
+Measured: after a five-minute pause, `/status/sessions` showed
+`The Adventures of Tintin | product=FlipFlex | state=playing` with
+`tsKey=-` — playing, with no transcode session behind it at all. Four minutes
+later the screen said `ERROR_CODE_IO_BAD_HTTP_STATUS`.
+
+Two fixes, and both are wanted:
+
+- **`PlexPlayback.ping`**, every ten seconds whenever the player is alive and
+  not playing. This is what the endpoint is for and what every Plex client
+  does. It stops most of these happening at all.
+- **`PlayerActivity.rebuildStream`**, on any playback error while streaming. A
+  new session id, a new URL at the current position, up to three times, with
+  the budget returned after a minute of clean playback. This catches the rest —
+  including every cause nobody has thought of, which on this handset turned out
+  to matter (see the Wi-Fi note below).
+
+Note that a rebuild **must** use a new session identifier. The old one is
+exactly what the server has stopped believing in; reusing it asks Plex to
+resume something it has already thrown away.
+
+### The handset drops its own Wi-Fi, and that kills streams
+
+Worth writing down because it looks like an app fault and is not. Observed
+twice in ten minutes during this round, on a link at **−38 dBm** with the
+access point in the same room:
+
+```
+wlan0: CTRL-EVENT-CONNECTED  ... [PTK=CCMP GTK=CCMP]
+   (18 seconds later, no IPv4 address ever assigned)
+wlan0: CTRL-EVENT-DISCONNECTED reason=3 locally_generated=1
+```
+
+`locally_generated=1` means the **phone** deauthenticated, not the AP. The
+four-way handshake completes every time; what never completes is DHCP, and
+Android tears an un-provisioned connection down after about eighteen seconds
+and falls back to LTE — at which point a LAN Plex server is simply gone.
+
+Two details for whoever chases this: the AP advertises
+`[WPA2-PSK-CCMP][RSN-PSK+SAE-CCMP]`, which is WPA2/WPA3 transition mode, and
+the phone has saved the network with `configKey="<our-ssid>"SAE` — it is
+associating as WPA3. Transition mode is a known source of exactly this on older
+MediaTek Wi-Fi stacks. The BSSID `9a:2a:…` is locally administered, so it is a
+mesh node rather than the router itself.
+
+This is not FlipFlex's bug, but it is very probably the "streaming dies after
+about thirty seconds" report, and it is why `rebuildStream` exists as well as
+`ping`: a stream that survives a reassociation is worth more here than one that
+explains why it stopped.
+
+**Testing around it**: `tools/usb-plex.sh` puts the app on the LAN over the USB
+cable — a TCP relay on the Mac plus `adb reverse tcp:32400 tcp:32400`, with the
+stored server URI pointed at `http://127.0.0.1:32400`. Costs no cellular data
+and does not care what the radio is doing.
 
 ### `optString` cannot be used on Plex JSON. This is the big one.
 
@@ -524,7 +646,12 @@ those groups map straight onto the captioned rows the list already draws.
 - [ ] Direct play for files the MT6739 can decode, skipping the transcoder.
       Worth less than it sounds on a 240-wide panel: it would pull a 1080p file
       across the radio to draw it into 320x180, costing more bandwidth and more
-      battery for the same picture. What it saves is the server's transcoder
+      battery for the same picture. What it saves is the server's transcoder.
+      **Settings → Try direct play** now exists as an experiment rather than a
+      feature, so the transcoder can be taken out of the path and the failure
+      rate compared. Expect it to work on part of the library and fail on the
+      rest: the MT6739 decodes HEVC only to 1600x960, so a 1080p HEVC source is
+      above what the chip will accept
 - [ ] Music, and the Now Playing screen from the art
 - [ ] **Autoplay next episode — and with it, shuffle as a *queue*.** Shuffle
       currently plays *one* random thing and stops at the end of it, because
@@ -539,7 +666,10 @@ those groups map straight onto the captioned rows the list already draws.
 - [ ] A landing-page redesign — the user has an idea for it and it is next
 - [ ] Downloads have no storage ceiling. PocketFlex keeps a 300 MB floor free
       because a full SD card is unrecoverable from the device; /data here has
-      11 GB and no such guard yet
+      11 GB and no such guard yet. Note that indexing now needs the file's size
+      again in free space for a few seconds at the end of every download
+- [x] ~~Seeking in downloads~~ — the file arrives with no index; we write one
+- [x] ~~Playback dying after the lid has been shut~~ — ping, and rebuild on error
 - [x] ~~Downloads and offline playback~~
 - [x] ~~Subtitles~~ — burned in, not soft. See the note below
 - [x] ~~Audio track selection (dub vs original)~~

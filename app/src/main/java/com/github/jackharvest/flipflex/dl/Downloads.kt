@@ -3,6 +3,7 @@ package com.github.jackharvest.flipflex.dl
 import android.content.Context
 import android.util.Log
 import com.github.jackharvest.flipflex.plex.PlexItem
+import com.github.jackharvest.flipflex.plex.Quality
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -80,6 +81,35 @@ object Downloads {
         val file: String = "",
         val addedAt: Long = 0,
         val summary: String = "",
+        /**
+         * What was baked into this copy when it was fetched, and can therefore
+         * never be changed again.
+         *
+         * A download is a finished transcode. Its resolution, its bitrate and
+         * whether the subtitles are burned into the picture were all decided at
+         * queue time and are now properties of the bytes on disk. The details
+         * page used to go on offering a quality picker and a subtitle switch for
+         * a downloaded episode -- controls that silently applied to some future
+         * streaming of it and did nothing whatever to the thing the user was
+         * about to press Play on.
+         *
+         * So they are recorded here and *displayed* instead of offered. It is
+         * also the only place they can be recorded: with the radio off there is
+         * no server to ask what this file is, and offline is exactly when a
+         * download gets watched.
+         */
+        val resolution: String = "",
+        val bitrateKbps: Int = 0,
+        val subtitlesBurned: Boolean = false,
+        /**
+         * True once [MatroskaIndex] has spliced a Cues element into the file.
+         *
+         * What Plex serves cannot be seeked at all -- see MatroskaIndex -- so
+         * this is the difference between a copy you can skip through and one you
+         * can only watch from the start. Recorded rather than assumed because an
+         * entry downloaded by an older build has no index and never will.
+         */
+        val seekable: Boolean = false,
     ) {
         val isShow: Boolean get() = showTitle.isNotEmpty()
     }
@@ -143,7 +173,13 @@ object Downloads {
         true
     }
 
-    fun setState(ctx: Context, ratingKey: String, state: String, bytes: Long = -1) =
+    fun setState(
+        ctx: Context,
+        ratingKey: String,
+        state: String,
+        bytes: Long = -1,
+        seekable: Boolean? = null,
+    ) =
         synchronized(lock) {
             val list = cache ?: read(ctx).also { cache = it }
             val i = list.indexOfFirst { it.ratingKey == ratingKey }
@@ -151,6 +187,7 @@ object Downloads {
             list[i] = list[i].copy(
                 state = state,
                 bytes = if (bytes >= 0) bytes else list[i].bytes,
+                seekable = seekable ?: list[i].seekable,
             )
             write(ctx, list)
         }
@@ -202,7 +239,13 @@ object Downloads {
      * from either screen, and an entry that lost its show name would land at the
      * top level of the Downloads library next to the films.
      */
-    fun entryFor(item: PlexItem, bitrateKbps: Int, summary: String): Entry {
+    fun entryFor(
+        item: PlexItem,
+        quality: Quality.Preset,
+        subtitles: Boolean,
+        summary: String,
+    ): Entry {
+        val bitrateKbps = quality.bitrate
         val code =
             if (item.parentIndex >= 0 && item.index >= 0) {
                 "S%02dE%02d".format(item.parentIndex, item.index)
@@ -228,6 +271,9 @@ object Downloads {
             file = fileName(item),
             addedAt = System.currentTimeMillis(),
             summary = summary,
+            resolution = quality.resolution,
+            bitrateKbps = bitrateKbps,
+            subtitlesBurned = subtitles,
         )
     }
 
@@ -272,6 +318,10 @@ object Downloads {
                     file = o.optString("file"),
                     addedAt = o.optLong("addedAt"),
                     summary = o.optString("summary"),
+                    resolution = o.optString("resolution"),
+                    bitrateKbps = o.optInt("bitrateKbps"),
+                    subtitlesBurned = o.optBoolean("subtitlesBurned"),
+                    seekable = o.optBoolean("seekable"),
                 )
             }.toMutableList()
         } catch (e: Exception) {
@@ -302,6 +352,10 @@ object Downloads {
                     .put("file", e.file)
                     .put("addedAt", e.addedAt)
                     .put("summary", e.summary)
+                    .put("resolution", e.resolution)
+                    .put("bitrateKbps", e.bitrateKbps)
+                    .put("subtitlesBurned", e.subtitlesBurned)
+                    .put("seekable", e.seekable)
             )
         }
         // Write beside it and rename, so a kill mid-write leaves the old index

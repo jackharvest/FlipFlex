@@ -61,6 +61,33 @@ class PlayerActivity : FlipActivity() {
         /** How often we tell the server where we are, while playing. */
         private const val TIMELINE_INTERVAL_MS = 10_000L
 
+        /**
+         * How often we tell the server we still exist, while *not* playing.
+         *
+         * Ten seconds is what Plex's own clients use. See [PlexPlayback.ping]
+         * for what it prevents, which is the lid being shut for five minutes
+         * and playback dying some minutes after it is opened again.
+         */
+        private const val PING_INTERVAL_MS = 10_000L
+
+        /**
+         * How many times a stream may be rebuilt under one playback before we
+         * admit defeat and put an error on the screen.
+         *
+         * Three, because the failures worth recovering from are one-off: a
+         * reaped session, a Wi-Fi handover, a transcoder that fell over and was
+         * restarted. Anything that fails three times in a row is a server that
+         * cannot serve this file, and retrying that forever would just be an
+         * endless buffering spinner with no way for the user to learn why.
+         */
+        private const val MAX_RECOVERIES = 3
+
+        /**
+         * Playing this long without incident means the trouble is behind us and
+         * the recovery budget is spent fairly on the *next* one.
+         */
+        private const val RECOVERY_FORGIVEN_MS = 60_000L
+
         private const val SEEK_MS = 15_000L
 
         /** How long the controls stay up after a key press. */
@@ -124,11 +151,27 @@ class PlayerActivity : FlipActivity() {
     private var ticker: Job? = null
 
     private lateinit var ratingKey: String
+
+    /**
+     * Where the next attempt at this stream should begin.
+     *
+     * Starts as whatever the caller asked to resume from and moves forward as
+     * a stream is rebuilt, so a recovery picks up where the picture stopped
+     * rather than at the beginning of the episode.
+     */
     private var startMs = 0L
-    private val session = PlexPlayback.newSession()
+
+    /** Not a val: a rebuilt stream needs an identifier the server has not seen. */
+    private var session = PlexPlayback.newSession()
 
     /** Set once the transcode is actually running, so we know to tear it down. */
     private var sessionStarted = false
+
+    /** Rebuilds spent so far, against [MAX_RECOVERIES]. */
+    private var recoveries = 0
+
+    /** Position at the last rebuild, for deciding when to forgive it. */
+    private var recoveryAnchorMs = 0L
 
     /**
      * True when the picture is coming off local storage rather than the server.
@@ -211,6 +254,9 @@ class PlayerActivity : FlipActivity() {
     }
 
     private fun startPlayback() {
+        // Clears the error a rebuild is recovering from. Leaving it up would
+        // put "Playback failed" over a picture that is playing again.
+        showMessage(null)
         stateView.text = getString(R.string.msg_loading)
 
         // A downloaded copy wins over the server, always, and without asking.
@@ -239,6 +285,7 @@ class PlayerActivity : FlipActivity() {
             quality = Quality.byId(store.quality),
             subtitles = intent.getBooleanExtra(EXTRA_SUBTITLES, store.subtitles),
             subtitleSize = store.subtitleSize,
+            direct = store.directPlay,
         )
 
         lifecycleScope.launch {
@@ -252,6 +299,20 @@ class PlayerActivity : FlipActivity() {
             // back to the list, which is indistinguishable from a broken app.
             val code = PlexPlayback.preflight(url, t)
             if (code != 200) {
+                // Mid-playback, try again rather than giving up: the common
+                // reason a rebuild's preflight fails is that the radio has not
+                // finished reassociating yet. This handset drops its own Wi-Fi
+                // and comes back a few seconds later -- observed twice in ten
+                // minutes on a -38 dBm link, with `locally_generated=1`, so the
+                // phone is leaving rather than being pushed -- and each
+                // preflight already spends about twenty seconds trying, so
+                // three of them is a minute of patience before the user is told
+                // anything.
+                //
+                // The first attempt is deliberately not this patient. Pressing
+                // Play and waiting a silent minute to be told it did not work
+                // is worse than being told in five seconds.
+                if (recoveries > 0 && rebuildStream("preflight HTTP $code")) return@launch
                 showMessage("Server would not start the stream.\nHTTP $code")
                 stateView.text = ""
                 return@launch
@@ -259,6 +320,59 @@ class PlayerActivity : FlipActivity() {
             sessionStarted = true
             attachPlayer(url)
         }
+    }
+
+    /**
+     * Throw the stream away and ask for a new one from where the picture froze.
+     *
+     * This is the answer to two separate reports that turn out to be the same
+     * fault. One is the lid being shut for a few minutes and playback dying
+     * some minutes after it is opened again -- Plex reaped the transcode, left
+     * the segments it had already written, and the client sailed on through
+     * them until it reached one that was never produced. The other is a stream
+     * simply stopping partway through a busy evening, which is that same reap
+     * arriving by a different route: a transcoder throttled to a standstill
+     * behind five other clients.
+     *
+     * In both cases the item is fine, the server is fine, and the only thing
+     * wrong is that *this* session no longer exists. Asking for another one at
+     * the current position turns a dead end into a few seconds of buffering.
+     *
+     * [PlexPlayback.ping] is the other half and the better half: it stops most
+     * of these happening at all. This is what catches the rest, including every
+     * cause nobody has thought of.
+     */
+    private fun rebuildStream(why: String): Boolean {
+        if (playingLocally) return false
+        if (recoveries >= MAX_RECOVERIES) {
+            Log.w(TAG, "not rebuilding again after $recoveries attempts ($why)")
+            return false
+        }
+        val at = player?.currentPosition?.coerceAtLeast(0) ?: startMs
+        recoveries++
+        recoveryAnchorMs = at
+        Log.i(TAG, "rebuilding the stream at ${at}ms, attempt $recoveries ($why)")
+
+        // The position has to be in the store before the new attempt runs, or
+        // closeOutPreviousPlayback sends a `stopped` timeline carrying whatever
+        // the last ten-second report happened to say -- which is the resume
+        // point the user would find on their TV.
+        store.lastPositionMs = at
+        player?.release()
+        player = null
+        playerView.player = null
+        ticker?.cancel()
+
+        // A new identifier, because the old session is exactly what the server
+        // has stopped believing in. Reusing it asks Plex to resume something it
+        // has already thrown away.
+        session = PlexPlayback.newSession()
+        sessionStarted = false
+        startMs = at
+        showChrome(sticky = true)
+        stateView.text = ""
+        startPlayback()
+        return true
     }
 
     /**
@@ -348,7 +462,12 @@ class PlayerActivity : FlipActivity() {
 
             override fun onPlayerError(error: PlaybackException) {
                 Log.w(TAG, "playback failed: ${error.errorCodeName}", error)
-                showMessage("Playback failed.\n${error.errorCodeName}")
+                // A stream that dies is nearly always a session the server has
+                // forgotten, and that is recoverable without troubling anyone.
+                // A local file that dies is a broken file, and no amount of
+                // asking again will change it.
+                if (rebuildStream(error.errorCodeName)) return
+                showMessage(explain(error))
                 stateView.text = ""
             }
         })
@@ -372,6 +491,7 @@ class PlayerActivity : FlipActivity() {
         ticker?.cancel()
         ticker = lifecycleScope.launch {
             var sinceReport = 0L
+            var sincePing = 0L
             while (isActive) {
                 paint()
                 val p = player
@@ -381,10 +501,68 @@ class PlayerActivity : FlipActivity() {
                         sinceReport = 0
                         report("playing", p.currentPosition)
                     }
+                    // A stream that has run on for a minute since the last
+                    // rebuild has recovered, so the budget goes back. Without
+                    // this a long film that hiccups four times in two hours
+                    // would spend its last recovery on the first hour and have
+                    // nothing left for the second.
+                    if (recoveries > 0 &&
+                        p.currentPosition - recoveryAnchorMs > RECOVERY_FORGIVEN_MS
+                    ) {
+                        recoveries = 0
+                    }
+                } else if (sessionStarted) {
+                    // Paused, buffering, or waiting on the transcode: nothing is
+                    // asking the server for segments, which is the state a
+                    // transcode gets reaped in. This is what the lid being shut
+                    // looks like from here.
+                    sincePing += 500
+                    if (sincePing >= PING_INTERVAL_MS) {
+                        sincePing = 0
+                        keepAlive()
+                    }
                 }
                 delay(500)
             }
         }
+    }
+
+    /**
+     * Say what went wrong in words, having already tried to fix it.
+     *
+     * By the time this is reached the stream has been rebuilt three times and
+     * still failed, so the user is owed something they can act on. The raw
+     * `errorCodeName` is not that: `ERROR_CODE_IO_BAD_HTTP_STATUS` was what a
+     * reaped transcode session put on the screen, and it tells the person
+     * holding the phone nothing about what to do next -- which on this handset
+     * is very often "the Wi-Fi has dropped again".
+     *
+     * The code is kept on the last line anyway. It is the only thing that makes
+     * a report reproducible, and it costs one line of a screen that is
+     * otherwise showing a failure.
+     */
+    private fun explain(error: PlaybackException): String {
+        val what = when (error.errorCode) {
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ->
+                "Lost the connection to Plex.\nCheck Wi-Fi."
+            PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS ->
+                "The server stopped sending.\nTry playing it again."
+            PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND ->
+                if (playingLocally) "The saved copy is missing." else "The server lost the stream."
+            PlaybackException.ERROR_CODE_DECODING_FAILED,
+            PlaybackException.ERROR_CODE_DECODER_INIT_FAILED ->
+                "This phone cannot decode that."
+            else -> "Playback failed."
+        }
+        return "$what\n\n${error.errorCodeName}"
+    }
+
+    /** Fire-and-forget "we are still here" for the transcode session. */
+    private fun keepAlive() {
+        val u = uri ?: return
+        val t = token ?: return
+        lifecycleScope.launch { PlexPlayback.ping(u, t, session) }
     }
 
     private fun paint() {

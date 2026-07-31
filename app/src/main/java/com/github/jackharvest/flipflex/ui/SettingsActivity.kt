@@ -120,6 +120,22 @@ class SettingsActivity : FlipActivity() {
                         payload = Entry { cycleSubtitleSize() },
                     )
                 )
+                // An experiment, not a feature, and labelled as one. The obvious
+                // suspect for a stream that dies partway through a busy evening
+                // is the server's transcoder, and this is the only way to take
+                // the transcoder out of the path and see whether the failures
+                // stop. It will not work on everything -- the MT6739 decodes
+                // HEVC only to 1600x960, so a 1080p HEVC source is above what
+                // the chip accepts -- which is exactly why it is off by default
+                // and why the subtitle says what it is for.
+                add(
+                    RowList.Row(
+                        title = "Try direct play",
+                        subtitle = "Skips the server's transcoder",
+                        trailing = if (store.directPlay) "On" else "Off",
+                        payload = Entry { store.directPlay = !store.directPlay; loadRoot() },
+                    )
+                )
                 add(
                     RowList.Row(
                         title = "Details before playing",

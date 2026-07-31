@@ -12,4 +12,19 @@
     <color name="ff_text">#FFFFFFFF</color>
     <color name="ff_text_dim">#FF8A8A8A</color>
     <color name="ff_rule">#FF2C2C2C</color>
+
+    <!-- Badges and row accents.
+         Amber is deliberately absent from both sets. It is the cursor, and a
+         badge or a stripe wearing the cursor's colour is a second thing on
+         screen claiming to be selected — which is the exact confusion the
+         parked colour above exists to avoid.
+
+         The hues are assigned by meaning, not by position, so the same fact is
+         always the same colour: blue is what the file already is, green is what
+         is about to reach the screen, violet is storage, rose is subtitles. -->
+    <color name="ff_badge_source">#FF3E9BD1</color>
+    <color name="ff_badge_target">#FF56B96A</color>
+    <color name="ff_badge_local">#FFA97BD6</color>
+    <color name="ff_badge_subs">#FFD86A8C</color>
+    <color name="ff_badge_text">#FF0B0B0B</color>
 </resources>

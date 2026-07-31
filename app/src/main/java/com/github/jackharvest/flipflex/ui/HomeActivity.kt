@@ -3,7 +3,6 @@ package com.github.jackharvest.flipflex.ui
 import android.os.Bundle
 import androidx.lifecycle.lifecycleScope
 import com.github.jackharvest.flipflex.R
-import com.github.jackharvest.flipflex.dl.DownloadService
 import com.github.jackharvest.flipflex.dl.Downloads
 import com.github.jackharvest.flipflex.input.Action
 import com.github.jackharvest.flipflex.plex.PlexItem
@@ -25,12 +24,22 @@ class HomeActivity : FlipActivity() {
     /** Every section on the server, including hidden ones, for the options menu. */
     private var allSections: List<PlexItem> = emptyList()
 
+    /** Libraries as they were last drawn, so reorder mode has something to sort. */
+    private var shownSections: List<PlexItem> = emptyList()
+
+    /**
+     * True while the list is the library list, rocking, waiting to be
+     * rearranged. See [RowList.wiggling] for why it rocks.
+     */
+    private var reordering = false
+
     /** What a home row does when chosen. */
     private sealed interface Dest {
         data object OnDeck : Dest
         data object Recent : Dest
         data object Downloads : Dest
         data object Settings : Dest
+        data object Reorder : Dest
         data class Section(val item: PlexItem) : Dest
     }
 
@@ -101,8 +110,26 @@ class HomeActivity : FlipActivity() {
         )
     }
 
+    /**
+     * The libraries in the order the user put them in.
+     *
+     * Anything the saved order does not mention keeps its server position and
+     * lands after everything that is mentioned, so a library added to the
+     * server tomorrow appears at the bottom of a carefully arranged list rather
+     * than in the middle of it -- and one deleted from the server leaves no gap
+     * and no stale entry. See [com.github.jackharvest.flipflex.store.Store.sectionOrder].
+     */
+    private fun inUserOrder(sections: List<PlexItem>): List<PlexItem> {
+        val order = store.sectionOrder
+        if (order.isEmpty()) return sections
+        val byKey = sections.associateBy { it.sectionKey }
+        val named = order.mapNotNull { byKey[it] }
+        return named + sections.filter { it.sectionKey !in order }
+    }
+
     private fun render(deck: List<PlexItem>, sections: List<PlexItem>) {
         val hidden = store.hiddenSections
+        shownSections = inUserOrder(sections).filter { it.sectionKey !in hidden }
         val rows = buildList {
             if (deck.isNotEmpty()) {
                 add(
@@ -116,7 +143,7 @@ class HomeActivity : FlipActivity() {
             // Hidden libraries are dropped here rather than being greyed out.
             // The whole point of hiding the 4K library on a 240x320 screen is to
             // stop it taking a row, so leaving a disabled row would defeat it.
-            sections.filter { it.sectionKey !in hidden }.forEach { s ->
+            shownSections.forEach { s ->
                 add(
                     RowList.Row(
                         title = s.title,
@@ -142,9 +169,94 @@ class HomeActivity : FlipActivity() {
                     )
                 )
             }
+            // Below the libraries, because it is about them and because a row
+            // that is pressed once a year must not sit above the ones pressed
+            // every day. Hidden with fewer than two libraries, where it would be
+            // a control with nothing to do.
+            if (shownSections.size > 1) {
+                add(
+                    RowList.Row(
+                        title = getString(R.string.home_reorder),
+                        subtitle = getString(R.string.home_reorder_note),
+                        payload = Dest.Reorder,
+                    )
+                )
+            }
             add(RowList.Row(title = getString(R.string.home_settings), payload = Dest.Settings))
         }
         list.submit(rows, keepSelection = true)
+    }
+
+    // ---- reorder mode ------------------------------------------------------
+
+    /**
+     * Rearrange the libraries, in place, on the screen they appear on.
+     *
+     * The alternative was a row of up/down buttons or a screen in Settings, and
+     * both get the same thing wrong: you would be arranging a list somewhere
+     * other than where you look at it, which means checking your work by
+     * navigating away. Here the thing being sorted is the thing on screen.
+     *
+     * There is no touchscreen and therefore no drag, so the gesture is
+     * pick-up-and-carry: OK takes hold of a row, up and down carry it, OK puts
+     * it down. That is two states for one key, which is exactly why the list
+     * has to *look* different -- see [RowList.wiggling].
+     */
+    private fun startReorder() {
+        reordering = true
+        setHeader(getString(R.string.home_reorder), showChevron = false)
+        setSoftKeys(left = getString(R.string.soft_done), right = null)
+        list.grabbed = -1
+        list.submit(
+            shownSections.map { s ->
+                RowList.Row(
+                    title = s.title,
+                    subtitle = if (s.type == "show") "TV Shows" else "Movies",
+                    payload = Dest.Section(s),
+                )
+            }
+        )
+        list.wiggling = true
+        showTransientMessage(getString(R.string.home_reorder_help))
+    }
+
+    /**
+     * Leave reorder mode, keeping the arrangement.
+     *
+     * Saved rather than asked about. Every arrangement is reversible by making
+     * another one, nothing is destroyed, and a confirmation panel over a list
+     * the user has just finished fiddling with would be one more press for a
+     * decision they have already expressed.
+     */
+    private fun finishReorder() {
+        val arranged = list.rows.mapNotNull { (it.payload as? Dest.Section)?.item?.sectionKey }
+        // Keys that were ordered before but are not on screen now -- a hidden
+        // library, or one this profile cannot see -- keep their place in the
+        // saved order rather than being forgotten by an edit that never
+        // concerned them.
+        store.sectionOrder = arranged + store.sectionOrder.filter { it !in arranged }
+        reordering = false
+        list.wiggling = false
+        list.grabbed = -1
+        showMessage(null)
+        setHeader(store.serverName ?: getString(R.string.app_name), showChevron = false)
+        setSoftKeys(left = null, right = getString(R.string.soft_options))
+        load()
+    }
+
+    /** Returns true if the key belonged to reorder mode. */
+    private fun handleReorderKey(action: Action): Boolean {
+        val held = list.grabbed >= 0
+        when (action) {
+            // A held row travels; an unheld cursor walks. Same two keys, and
+            // the wiggle plus the lifted row are what say which is happening.
+            Action.UP -> if (held) { list.shift(-1); list.grabbed = list.selected } else list.move(-1)
+            Action.DOWN -> if (held) { list.shift(+1); list.grabbed = list.selected } else list.move(+1)
+            Action.SELECT -> list.grabbed = if (held) -1 else list.selected
+            Action.BACK -> finishReorder()
+            else -> return false
+        }
+        return true
     }
 
     private fun open(dest: Dest) {
@@ -169,6 +281,7 @@ class HomeActivity : FlipActivity() {
             )
             Dest.Downloads -> startActivity(DownloadsActivity.intent(this))
             Dest.Settings -> startActivity(SettingsActivity.intent(this))
+            Dest.Reorder -> startReorder()
         }
     }
 
@@ -206,7 +319,8 @@ class HomeActivity : FlipActivity() {
 
     override fun optionsHeading(): String = list.selectedRow()?.title.orEmpty()
 
-    override fun optionsFor(): List<Option> = buildList {
+    /** No context menu while rearranging: the only actions are the two keys. */
+    override fun optionsFor(): List<Option> = if (reordering) emptyList() else buildList {
         val dest = list.selectedRow()?.payload
 
         // Both of these are offered on the library that is focused, which is
@@ -229,6 +343,9 @@ class HomeActivity : FlipActivity() {
                 load()
             })
         }
+        if (shownSections.size > 1) {
+            add(Option(getString(R.string.home_reorder)) { startReorder() })
+        }
 
         add(Option("Settings") { startActivity(SettingsActivity.intent(this@HomeActivity)) })
         add(Option("Switch profile") {
@@ -240,26 +357,34 @@ class HomeActivity : FlipActivity() {
         add(Option("Refresh") { load() })
     }
 
-    override fun onAction(action: Action, keyCode: Int): Boolean = when (action) {
-        Action.UP -> list.move(-1)
-        Action.DOWN -> list.move(+1)
-        // With no rows the screen is showing an error, and OK is the retry --
-        // it is the only key on the error state, so it has to mean "try again"
-        // there and "open this" everywhere else.
-        Action.SELECT -> if (list.rows.isEmpty()) { load(); true } else list.choose()
-        else -> false
+    override fun onAction(action: Action, keyCode: Int): Boolean {
+        if (reordering && handleReorderKey(action)) return true
+        return when (action) {
+            Action.UP -> list.move(-1)
+            Action.DOWN -> list.move(+1)
+            // With no rows the screen is showing an error, and OK is the retry --
+            // it is the only key on the error state, so it has to mean "try again"
+            // there and "open this" everywhere else.
+            Action.SELECT -> if (list.rows.isEmpty()) { load(); true } else list.choose()
+            else -> false
+        }
     }
 
     override fun onResume() {
         super.onResume()
         // Coming back from an episode should show the updated resume position in
         // Continue Watching, and coming back from Settings should reflect a
-        // changed server, profile or hidden set.
+        // changed server, profile or hidden set. Not while rearranging, which
+        // would replace the list under the row being carried.
+        if (reordering) return
         setHeader(store.serverName ?: getString(R.string.app_name), showChevron = false)
         if (list.rows.isNotEmpty()) load()
     }
 
     override fun goHome() {
-        // Already here.
+        // The left softkey is "Done" while rearranging, and this is where it
+        // arrives -- the shell routes that key here before anything else sees it.
+        if (reordering) finishReorder()
+        // Otherwise already here.
     }
 }

@@ -10,12 +10,20 @@
 
     <string name="soft_home">Home</string>
     <string name="soft_options">Options</string>
+    <string name="soft_done">Done</string>
 
     <string name="home_continue">Continue Watching</string>
     <string name="home_recent">Recently Added</string>
     <string name="home_downloads">Downloads</string>
     <string name="home_settings">Settings</string>
     <string name="home_offline_note">The server is not reachable</string>
+
+    <!-- Reorder mode. The help line has to name both jobs of the OK key,
+         because OK meaning "pick up" and then "put down" is the one thing about
+         this mode that cannot be guessed from looking at it. -->
+    <string name="home_reorder">Reorder libraries</string>
+    <string name="home_reorder_note">Choose what sits where</string>
+    <string name="home_reorder_help">OK picks a library up.\nUp and down move it.\nOK puts it back down.\n\nDone when you have finished.</string>
 
     <string name="downloads_empty">Nothing downloaded yet.\n\nOpen anything and choose\nDownload to keep a copy\non this phone.</string>
 

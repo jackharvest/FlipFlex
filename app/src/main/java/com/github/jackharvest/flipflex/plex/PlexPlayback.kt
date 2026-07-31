@@ -43,10 +43,12 @@ object PlexPlayback {
         subtitles: Boolean,
         subtitleSize: Int,
         platform: String,
+        direct: Boolean = false,
     ): String = buildString {
         append("&mediaIndex=0&partIndex=0")
         append("&offset=$offsetSec&fastSeek=1")
-        append("&directPlay=0&directStream=0")
+        if (direct) append("&directPlay=1&directStream=1")
+        else append("&directPlay=0&directStream=0")
         append("&videoQuality=60&videoResolution=${quality.resolution}")
         append("&maxVideoBitrate=${quality.bitrate}")
         // BURNED IN, not a soft track, and this reverses an earlier note that
@@ -89,11 +91,15 @@ object PlexPlayback {
         quality: Quality.Preset,
         subtitles: Boolean,
         subtitleSize: Int,
+        direct: Boolean = false,
     ): String =
         "$uri/video/:/transcode/universal/start.m3u8" +
             "?path=${PlexClient.enc("/library/metadata/$ratingKey")}" +
             "&protocol=hls" +
-            params(session, offsetSec, token, quality, subtitles, subtitleSize, PlexClient.PLATFORM)
+            params(
+                session, offsetSec, token, quality, subtitles, subtitleSize,
+                PlexClient.PLATFORM, direct,
+            )
 
     /**
      * The same transcoder, asked for one continuous file instead of a playlist.
@@ -180,6 +186,30 @@ object PlexPlayback {
                 "&state=$state&time=$timeMs&duration=$durationMs",
             token,
         )
+    }
+
+    /**
+     * Tell the server we are still here, while we are not asking it for anything.
+     *
+     * A transcode session is kept alive by segment requests. Pause -- which on
+     * this handset means "the lid is shut", the single most common thing that
+     * happens to it -- stops those, and Plex eventually reaps the session and
+     * deletes the segments it had produced.
+     *
+     * The failure that causes is nastier than it sounds, because it is delayed.
+     * Plex leaves the already-transcoded segments in place for a while, so
+     * playback **resumes perfectly** and runs on for however many minutes the
+     * transcoder had got ahead, and only then hits the first segment that was
+     * never written. Measured exactly that way: after a five-minute pause the
+     * server's session list showed FlipFlex playing with no transcode session
+     * behind it at all. From the user's seat that is "it played a bit of it and
+     * then said 400", which is precisely how it was reported and is why looking
+     * at the moment of the error tells you nothing.
+     *
+     * Every Plex client does this; it is what the endpoint is for.
+     */
+    suspend fun ping(uri: String, token: String, session: String) {
+        PlexClient.text("$uri/video/:/transcode/universal/ping?session=$session", token)
     }
 
     /**

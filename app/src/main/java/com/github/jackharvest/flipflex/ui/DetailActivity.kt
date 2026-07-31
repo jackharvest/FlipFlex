@@ -117,17 +117,37 @@ class DetailActivity : FlipActivity() {
 
     // ---- rendering ---------------------------------------------------------
 
+    /**
+     * ## Where the description sits, and why it is here rather than at the top
+     *
+     * It used to be the first thing on the list, above everything. That reads
+     * beautifully on arrival and then becomes unreachable: the cursor lands on
+     * the first *selectable* row, which is below the prose, and every scroll
+     * pins that row to the top of the viewport -- so the moment you pressed
+     * down, the description left the screen and no key would ever bring it
+     * back. That was the report, and it was a real dead end rather than an
+     * awkwardness. [RowList] now anchors at zero whenever nothing selectable
+     * sits above the cursor, which fixes the dead end on its own.
+     *
+     * The order below then follows from what the cursor's home is worth. On a
+     * phone that gets opened for four minutes, Play should be under the cursor
+     * on arrival -- so it goes first, and the description immediately after it.
+     * That keeps both on screen at once at the position the page opens in, and
+     * puts the prose one press from the cursor's resting place instead of
+     * behind it. The settings follow, because they are the rarer errand.
+     *
+     * Two columns -- prose on the right, controls on the left -- was tried and
+     * abandoned: 240dp split two ways is about eighteen characters a line, and
+     * a summary set that narrow is twelve ragged lines that fit on the screen
+     * even less well than one column did.
+     */
     private fun render(d: PlexDetail.Detail) {
         val item = d.item
         val local = Downloads.get(this, ratingKey)
-        val q = Quality.byId(store.quality)
+        val saved = local?.state == Downloads.DONE
 
         val rows = buildList {
-            add(RowList.Row(title = factsLine(d), isBlurb = true))
-            add(RowList.Row(title = pipelineLine(d, q, local), isBlurb = true))
-            if (d.summary.isNotEmpty()) {
-                add(RowList.Row(title = d.summary, isBlurb = true))
-            }
+            add(RowList.Row(title = factsLine(d), badges = badges(d, local), isBlurb = true))
 
             if (item.isPlayable) {
                 add(RowList.Row(title = "PLAY", isHeader = true))
@@ -171,53 +191,136 @@ class DetailActivity : FlipActivity() {
                 )
             }
 
-            add(RowList.Row(title = "SETTINGS FOR THIS", isHeader = true))
-
-            // Subtitles and audio are per-item and server-side, so they are only
-            // offered where there is a part to apply them to. On a show or a
-            // season the global switch in Settings is the only sensible answer,
-            // and offering a track picker with nothing in it would be worse than
-            // not offering one.
-            if (d.partId.isNotEmpty()) {
-                add(
-                    RowList.Row(
-                        title = "Subtitles",
-                        trailing = subtitleLabel(d),
-                        payload = Act { chooseSubtitle(d) },
-                    )
-                )
-                if (d.audio.size > 1) {
-                    add(
-                        RowList.Row(
-                            title = "Audio",
-                            trailing = shortLabel(d.selectedAudio?.label ?: "Default"),
-                            payload = Act { chooseAudio(d) },
-                        )
-                    )
-                }
-            } else {
-                add(
-                    RowList.Row(
-                        title = "Subtitles",
-                        trailing = if (store.subtitles) "On" else "Off",
-                        payload = Act { store.subtitles = !store.subtitles; render(d) },
-                    )
-                )
+            if (d.summary.isNotEmpty()) {
+                add(RowList.Row(title = d.summary, isBlurb = true))
             }
 
-            add(
-                RowList.Row(
-                    title = "Quality",
-                    subtitle = "Applies to all playback",
-                    trailing = q.label,
-                    payload = Act { chooseQuality(d) },
-                )
-            )
-
-            add(downloadRow(item, local))
+            if (saved) savedSection(local!!) else settingsSection(d, item, local)
         }
 
         list.submit(rows, keepSelection = true)
+    }
+
+    /**
+     * What a copy on the phone is, rather than what it could be.
+     *
+     * A download is a finished transcode. Its resolution, its bitrate and
+     * whether the subtitles are burned into the picture were decided when it
+     * was queued and are now facts about the bytes on disk -- and the player
+     * always prefers the local copy, so nothing on this page can change what
+     * pressing Play produces. The page nevertheless went on offering a quality
+     * picker and a subtitle switch for a downloaded episode: two controls that
+     * appeared to be about the thing you were looking at, applied to some
+     * hypothetical future streaming of it, and did nothing at all to the file.
+     *
+     * So the same three facts are shown instead of offered, as badges, and the
+     * only action left is the only one that is real.
+     */
+    private fun MutableList<RowList.Row>.savedSection(local: Downloads.Entry) {
+        add(RowList.Row(title = "ON THIS PHONE", isHeader = true))
+        add(
+            RowList.Row(
+                title = if (local.seekable) {
+                    "Plays with no server and no Wi-Fi."
+                } else {
+                    "Plays with no server and no Wi-Fi.\n" +
+                        "Saved before seeking worked, so it cannot be skipped through. " +
+                        "Download it again to fix that."
+                },
+                isBlurb = true,
+            )
+        )
+        add(
+            RowList.Row(
+                title = "Delete this copy",
+                subtitle = Downloads.humanBytes(local.bytes),
+                accent = R.color.ff_badge_local,
+                payload = Act { confirmDelete(local) },
+            )
+        )
+    }
+
+    /**
+     * The three things people change, marked as a group.
+     *
+     * They were drawn identically to Play and to every navigation row above
+     * them, so a list whose top half is "watch this" and whose bottom half is
+     * "configure this" read as one undifferentiated column of eight. The
+     * coloured stripe and the coloured value are what separate the two halves
+     * without spending a caption or a screen on it.
+     */
+    private fun MutableList<RowList.Row>.settingsSection(
+        d: PlexDetail.Detail,
+        item: PlexItem,
+        local: Downloads.Entry?,
+    ) {
+        add(RowList.Row(title = "SETTINGS FOR THIS", isHeader = true))
+
+        // Subtitles and audio are per-item and server-side, so they are only
+        // offered where there is a part to apply them to. On a show or a
+        // season the global switch in Settings is the only sensible answer,
+        // and offering a track picker with nothing in it would be worse than
+        // not offering one.
+        if (d.partId.isNotEmpty()) {
+            add(
+                RowList.Row(
+                    title = "Subtitles",
+                    trailing = subtitleLabel(d),
+                    accent = R.color.ff_badge_subs,
+                    payload = Act { chooseSubtitle(d) },
+                )
+            )
+            if (d.audio.size > 1) {
+                add(
+                    RowList.Row(
+                        title = "Audio",
+                        trailing = shortLabel(d.selectedAudio?.label ?: "Default"),
+                        accent = R.color.ff_badge_subs,
+                        payload = Act { chooseAudio(d) },
+                    )
+                )
+            }
+        } else {
+            add(
+                RowList.Row(
+                    title = "Subtitles",
+                    trailing = if (store.subtitles) "On" else "Off",
+                    accent = R.color.ff_badge_subs,
+                    payload = Act { store.subtitles = !store.subtitles; render(d) },
+                )
+            )
+        }
+
+        val q = Quality.byId(store.quality)
+        add(
+            RowList.Row(
+                title = "Streaming quality",
+                subtitle = q.summary,
+                trailing = q.label,
+                accent = R.color.ff_badge_target,
+                payload = Act { chooseQuality(d) },
+            )
+        )
+
+        // The download quality lives here, next to the button that uses it,
+        // rather than only in Settings. It was three screens away from the
+        // moment anybody thinks about it, which is the moment they are looking
+        // at something they want to take with them -- and a default nobody can
+        // find is a default nobody changes. It is deliberately the same
+        // system-wide preference the Settings screen edits, not a per-item one:
+        // the next thing you download should behave the way the last one did.
+        val dq = Quality.byId(store.downloadQuality)
+        add(
+            RowList.Row(
+                title = "Download quality",
+                subtitle = "${dq.summary} · all downloads",
+                trailing = dq.label,
+                accent = R.color.ff_badge_local,
+                payload = Act { chooseDownloadQuality(d) },
+            )
+        )
+
+        add(downloadRow(item, local))
     }
 
     /** "S1 · E4 · 2016 · 62m · TV-MA" -- whatever of it the server knows. */
@@ -242,26 +345,51 @@ class DetailActivity : FlipActivity() {
     }
 
     /**
-     * What is about to happen to the pixels, said plainly.
+     * What the file is, and what is about to reach the screen.
      *
-     * This is the line the details page was asked for: the source is 1080p, the
-     * screen is 240 wide, and the server is going to make the difference go
-     * away. Worth stating rather than implying, because it is the answer to
-     * "why does this look soft" and to "why is direct play not offered" at the
-     * same time -- pulling a 1080p file across the radio to draw it into 320x180
-     * would cost more bandwidth and more battery for the same picture.
+     * This was one line of dim grey text -- `1080p · HEVC · 5.5 Mbps → 320x240
+     * 800 kbps` -- sitting directly above a summary in the same dim grey, which
+     * made four separate facts into thirty characters of prose that nobody
+     * reads and nobody can scan. The colours do the work the punctuation was
+     * failing at, and they mean something: blue is what the file already is,
+     * green is what will actually be played, violet is the copy on the phone,
+     * rose is subtitles.
+     *
+     * A downloaded item reports its own numbers rather than the server's,
+     * because for that item they are different and the phone's are the true
+     * ones -- and because with the radio off they are the only ones there are.
      */
-    private fun pipelineLine(
-        d: PlexDetail.Detail,
-        q: Quality.Preset,
-        local: Downloads.Entry?,
-    ): String {
-        if (local?.state == Downloads.DONE) {
-            return "Saved on this phone · ${Downloads.humanBytes(local.bytes)}\nPlays with no server and no Wi-Fi."
+    private fun badges(d: PlexDetail.Detail, local: Downloads.Entry?): List<BadgeStrip.Badge> =
+        buildList {
+            if (d.sourceResolution.isNotEmpty()) {
+                add(BadgeStrip.Badge(d.sourceResolution, R.color.ff_badge_source))
+            }
+            if (d.videoCodec.isNotEmpty()) {
+                add(BadgeStrip.Badge(d.videoCodec.uppercase(), R.color.ff_badge_source))
+            }
+            if (d.sourceBitrateKbps > 0) {
+                add(BadgeStrip.Badge(mbps(d.sourceBitrateKbps), R.color.ff_badge_source))
+            }
+            if (local?.state == Downloads.DONE) {
+                add(BadgeStrip.Badge(Downloads.humanBytes(local.bytes), R.color.ff_badge_local))
+                if (local.resolution.isNotEmpty()) {
+                    add(BadgeStrip.Badge(local.resolution, R.color.ff_badge_target))
+                }
+                if (local.bitrateKbps > 0) {
+                    add(BadgeStrip.Badge(mbps(local.bitrateKbps), R.color.ff_badge_target))
+                }
+                if (local.subtitlesBurned) {
+                    add(BadgeStrip.Badge("Subtitles", R.color.ff_badge_subs))
+                }
+            } else if (d.item.isPlayable) {
+                val q = Quality.byId(store.quality)
+                add(BadgeStrip.Badge(q.resolution, R.color.ff_badge_target))
+                add(BadgeStrip.Badge(mbps(q.bitrate), R.color.ff_badge_target))
+            }
         }
-        val source = d.sourceLine().ifEmpty { "Source" }
-        return "$source  →  ${q.resolution} ${q.bitrate} kbps"
-    }
+
+    private fun mbps(kbps: Int): String =
+        if (kbps >= 1000) "%.1f Mbps".format(kbps / 1000f) else "$kbps kbps"
 
     private fun subtitleLabel(d: PlexDetail.Detail): String {
         val sel = d.selectedSubtitle ?: return "Off"
@@ -272,45 +400,43 @@ class DetailActivity : FlipActivity() {
     private fun shortLabel(s: String): String = if (s.length > 14) s.take(13) + "…" else s
 
     private fun downloadRow(item: PlexItem, local: Downloads.Entry?): RowList.Row = when {
-        local?.state == Downloads.DONE -> RowList.Row(
-            title = "Downloaded",
-            subtitle = Downloads.humanBytes(local.bytes),
-            trailing = "Delete",
-            payload = Act { confirmDelete(local) },
-        )
         local?.state == Downloads.DOWNLOADING -> RowList.Row(
             title = "Downloading…",
             trailing = "Cancel",
+            accent = R.color.ff_badge_local,
             payload = Act { Downloads.remove(this, ratingKey); reload() },
         )
         local?.state == Downloads.QUEUED -> RowList.Row(
             title = "Queued",
             trailing = "Cancel",
+            accent = R.color.ff_badge_local,
             payload = Act { Downloads.remove(this, ratingKey); reload() },
         )
         local?.state == Downloads.FAILED -> RowList.Row(
             title = "Download failed",
             trailing = "Retry",
+            accent = R.color.ff_badge_local,
             payload = Act { Downloads.remove(this, ratingKey); queue(item) },
         )
         item.isContainer -> RowList.Row(
             title = "Download all episodes",
-            subtitle = qualityNote(),
+            accent = R.color.ff_badge_local,
             payload = Act { queueAll(item) },
         )
         else -> RowList.Row(
             title = "Download",
-            subtitle = qualityNote(),
+            accent = R.color.ff_badge_local,
             payload = Act { queue(item) },
         )
     }
 
-    private fun qualityNote(): String {
-        val q = Quality.byId(store.downloadQuality)
-        return "${q.label} · ${q.resolution}"
-    }
-
-    /** Offline, with only what the download index remembers. */
+    /**
+     * Offline, with only what the download index remembers.
+     *
+     * Same order as the online page -- facts, Play, description, the one real
+     * action -- so that having no server changes what is on the screen without
+     * changing where anything is.
+     */
     private fun renderOffline(local: Downloads.Entry) {
         showMessage(null)
         setHeader(local.title)
@@ -322,19 +448,10 @@ class DetailActivity : FlipActivity() {
                             local.showTitle.ifEmpty { null },
                             local.code.ifEmpty { null },
                         ).joinToString("  ·  "),
+                        badges = offlineBadges(local),
                         isBlurb = true,
                     )
                 )
-                add(
-                    RowList.Row(
-                        title = "Saved on this phone · ${Downloads.humanBytes(local.bytes)}\n" +
-                            "The server is not reachable, so only the copy on this phone is available.",
-                        isBlurb = true,
-                    )
-                )
-                if (local.summary.isNotEmpty()) {
-                    add(RowList.Row(title = local.summary, isBlurb = true))
-                }
                 add(RowList.Row(title = "PLAY", isHeader = true))
                 add(
                     RowList.Row(
@@ -352,16 +469,38 @@ class DetailActivity : FlipActivity() {
                         },
                     )
                 )
+                if (local.summary.isNotEmpty()) {
+                    add(RowList.Row(title = local.summary, isBlurb = true))
+                }
+                add(RowList.Row(title = "ON THIS PHONE", isHeader = true))
                 add(
                     RowList.Row(
-                        title = "Delete download",
+                        title = "The server is not reachable, so this is the only copy available.",
+                        isBlurb = true,
+                    )
+                )
+                add(
+                    RowList.Row(
+                        title = "Delete this copy",
                         subtitle = Downloads.humanBytes(local.bytes),
+                        accent = R.color.ff_badge_local,
                         payload = Act { confirmDelete(local) },
                     )
                 )
             },
             keepSelection = true,
         )
+    }
+
+    private fun offlineBadges(local: Downloads.Entry): List<BadgeStrip.Badge> = buildList {
+        add(BadgeStrip.Badge(Downloads.humanBytes(local.bytes), R.color.ff_badge_local))
+        if (local.resolution.isNotEmpty()) {
+            add(BadgeStrip.Badge(local.resolution, R.color.ff_badge_target))
+        }
+        if (local.bitrateKbps > 0) {
+            add(BadgeStrip.Badge(mbps(local.bitrateKbps), R.color.ff_badge_target))
+        }
+        if (local.subtitlesBurned) add(BadgeStrip.Badge("Subtitles", R.color.ff_badge_subs))
     }
 
     // ---- actions -----------------------------------------------------------
@@ -477,10 +616,32 @@ class DetailActivity : FlipActivity() {
     private fun chooseQuality(d: PlexDetail.Detail) {
         val current = Quality.byId(store.quality)
         chooseFrom(
-            "Quality",
+            "Streaming quality",
             Quality.PRESETS.map { p ->
                 Option(if (p.id == current.id) "${p.label} · ${p.summary}  ✓" else "${p.label} · ${p.summary}") {
                     store.quality = p.id
+                    render(d)
+                }
+            },
+            startAt = Quality.PRESETS.indexOfFirst { it.id == current.id }.coerceAtLeast(0),
+        )
+    }
+
+    /**
+     * The download preset, changed from the page you decide to download on.
+     *
+     * The same system-wide value the Settings screen edits, deliberately -- a
+     * per-item download quality would mean a Downloads folder whose files are
+     * all different and none of them what you expected. What was wrong before
+     * was only where it lived: three screens from the button that uses it.
+     */
+    private fun chooseDownloadQuality(d: PlexDetail.Detail) {
+        val current = Quality.byId(store.downloadQuality)
+        chooseFrom(
+            "Download quality",
+            Quality.PRESETS.map { p ->
+                Option(if (p.id == current.id) "${p.label} · ${p.summary}  ✓" else "${p.label} · ${p.summary}") {
+                    store.downloadQuality = p.id
                     render(d)
                 }
             },
@@ -492,10 +653,16 @@ class DetailActivity : FlipActivity() {
 
     private fun queue(item: PlexItem) {
         val q = Quality.byId(store.downloadQuality)
-        val added = Downloads.add(
-            this,
-            Downloads.entryFor(item, q.bitrate, detail?.summary.orEmpty()),
-        )
+        // The subtitle decision is resolved here, once, and stored on the row.
+        // It is burned into the picture by the transcoder, so it is a property
+        // of the file from the moment it is queued -- and it has to be read the
+        // same way playing it would read it, per item and off the server, or a
+        // download of something with an English track selected on a TV would
+        // silently arrive without it.
+        val burn = detail?.takeIf { it.partId.isNotEmpty() }
+            ?.let { it.selectedSubtitle != null }
+            ?: store.subtitles
+        val added = Downloads.add(this, Downloads.entryFor(item, q, burn, detail?.summary.orEmpty()))
         if (added) DownloadService.start(this)
         reload()
     }
@@ -522,7 +689,14 @@ class DetailActivity : FlipActivity() {
                 return@launch
             }
             val q = Quality.byId(store.downloadQuality)
-            val n = eps.count { Downloads.add(this@DetailActivity, Downloads.entryFor(it, q.bitrate, "")) }
+            // A whole season has no one part to read a subtitle choice off, so
+            // the global default is the only honest answer here.
+            val n = eps.count {
+                Downloads.add(
+                    this@DetailActivity,
+                    Downloads.entryFor(it, q, store.subtitles, ""),
+                )
+            }
             if (n > 0) DownloadService.start(this@DetailActivity)
             showTransientMessage(
                 if (n == 0) "Already queued." else "Queued $n episode${if (n == 1) "" else "s"}."

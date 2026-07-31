@@ -94,6 +94,45 @@ Everything is already transcoded, so `subtitles=burn` costs nothing extra and
 gives one behaviour for every file. `subtitleSize` is a setting because Plex's
 100 is sized for a television.
 
+**A downloaded file has no seek index, and Plex will not give you one.**
+`start.mkv` is muxed live into the socket, so it has an unknown-size Segment
+and **no Cues element** — and `MatroskaExtractor` builds its seek map from Cues
+and nothing else. With none, every `seekTo` collapses to zero: measured as six
+presses of forward leaving the clock at 0:01 and restarting the picture. There
+is no way round it on the server side. Plex **ignores the extension** —
+`start.mp4` and `start.ts` both return Matroska, byte-identical in size — and
+every profile that serves a single file gives **MP3** audio, which `MediaMuxer`
+cannot write into MP4, so remuxing is out too. `dl/MatroskaIndex.kt` writes the
+index instead: one linear walk, a cue point every five seconds, spliced in
+*ahead of the first cluster* because the extractor parses forwards and never
+follows the SeekHead. Fixed-width cue fields are load-bearing — see the class
+comment.
+
+**A paused transcode gets reaped, and the failure arrives minutes later.**
+Plex keeps a transcode alive on segment requests. Closing the lid stops those,
+Plex reaps the session but **leaves the segments it already produced** — so
+playback resumes perfectly, runs on for several minutes, and only then dies on
+the first segment that was never written. Measured: `/status/sessions` showed
+FlipFlex playing with no transcode session behind it at all. The moment of the
+error tells you nothing about the cause. `PlexPlayback.ping` every ten seconds
+while not playing prevents most of it; `PlayerActivity.rebuildStream` catches
+the rest by asking for a **new session id** at the current position.
+
+**The handset drops its own Wi-Fi.** `CTRL-EVENT-DISCONNECTED reason=3
+locally_generated=1` about eighteen seconds after a successful four-way
+handshake, at −38 dBm, with no IPv4 ever assigned — DHCP never completes and
+Android tears down the un-provisioned link. The AP is in WPA2/WPA3 transition
+mode (`[WPA2-PSK-CCMP][RSN-PSK+SAE-CCMP]`) and the phone has saved the network
+as SAE. This is not an app bug but it kills streams, and it is why
+`tools/usb-plex.sh` exists: it puts the phone on the LAN server over the USB
+cable so testing does not depend on the radio.
+
+**Surround is already downmixed; do not add a parameter for it.** An 8-channel
+E-AC-3 source comes back **2-channel** on both paths — AAC stereo over HLS
+under `Android`, MP3 stereo over `start.mkv` under `Chrome`. `maxAudioChannels`,
+`audioChannelCount` and a `X-Plex-Client-Profile-Extra` channel limitation all
+made no difference because there was nothing to change.
+
 **A failed network call is not a rejected login.** `PlexAuth.validate` used to
 return `String?`, where null meant both "plex.tv refused this token" and "plex.tv
 could not be reached" — and `SplashActivity` signed out on null. So **opening
@@ -186,6 +225,7 @@ tools/backup.sh critical        # ~2 min, enough to un-brick
 tools/backup.sh full            # ~1-2 h, the shareable flash.bin
 tools/setup-mtkclient.sh        # rebuild vendor/mtkclient from scratch
 tools/build.sh [install|run]    # the APK; sets JAVA_HOME so gradlew works
+tools/usb-plex.sh <ip> [stop]   # reach the LAN Plex server over USB, not Wi-Fi
 tools/install-menu-overlay.sh   # the Menu entry, as a Magisk module. Reboots
 tools/install-menu-overlay.sh --verify   # after the reboot: is the overlay on?
 tools/install-menu-overlay.sh --remove   # put the Menu back as it was

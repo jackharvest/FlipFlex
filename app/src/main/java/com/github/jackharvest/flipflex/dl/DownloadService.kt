@@ -145,11 +145,17 @@ class DownloadService : Service() {
         cancelled = false
 
         val session = PlexPlayback.newSession()
-        val quality = Quality.byId(store.downloadQuality)
+        // The entry's own settings, not the current ones. A queue is drained
+        // minutes or hours after it is filled, and reading the live preference
+        // here meant an episode queued at High and downloaded after the user
+        // dropped the setting to Low arrived as Low -- while its own row, the
+        // details page and the badge all went on saying High. The row is the
+        // record of what was asked for; this is where it gets honoured.
+        val quality = Quality.byBitrate(entry.bitrateKbps, entry.resolution)
         val url = PlexPlayback.downloadUrl(
             uri, token, entry.ratingKey, session,
             quality = quality,
-            subtitles = store.subtitles,
+            subtitles = entry.subtitlesBurned,
             subtitleSize = store.subtitleSize,
         )
 
@@ -245,9 +251,32 @@ class DownloadService : Service() {
         }
 
         if (ok && written >= MIN_PLAUSIBLE_BYTES) {
-            part.renameTo(Downloads.fileFor(this, entry))
-            Downloads.setState(this, entry.ratingKey, Downloads.DONE, written)
-            Log.i(TAG, "finished ${entry.title} (${Downloads.humanBytes(written)})")
+            val target = Downloads.fileFor(this, entry)
+            // Splice in the seek index before the file becomes visible as a
+            // download. What the transcoder produces has no Cues element and is
+            // therefore completely unseekable -- see MatroskaIndex. Doing it
+            // here rather than at play time means the cost is paid once, while
+            // the user is already waiting, instead of on every open.
+            //
+            // Indexing writes a second copy and then drops the first, so it
+            // needs the file's size again in free space for a few seconds. A
+            // failure is not a failed download: the unindexed file is perfectly
+            // playable and merely cannot be skipped through, so it is kept.
+            notifyIndexing(entry)
+            val indexed = MatroskaIndex.addCues(part, target)
+            if (indexed) {
+                part.delete()
+            } else {
+                part.renameTo(target)
+            }
+            Downloads.setState(
+                this, entry.ratingKey, Downloads.DONE, target.length(), seekable = indexed,
+            )
+            Log.i(
+                TAG,
+                "finished ${entry.title} (${Downloads.humanBytes(target.length())})" +
+                    if (indexed) ", seekable" else ", NOT seekable",
+            )
         } else {
             part.delete()
             Downloads.setState(this, entry.ratingKey, Downloads.FAILED, 0)
@@ -277,6 +306,18 @@ class DownloadService : Service() {
         val ch = NotificationChannel(CHANNEL, "Downloads", NotificationManager.IMPORTANCE_LOW)
         ch.setShowBadge(false)
         nm.createNotificationChannel(ch)
+    }
+
+    /**
+     * Indexing a 50 MB episode takes a few seconds of solid disk on an MT6739,
+     * and it happens after the transfer has visibly finished. Without a line
+     * saying so, the notification sits at 99% doing nothing anybody can see.
+     */
+    private fun notifyIndexing(entry: Downloads.Entry) {
+        getSystemService(NotificationManager::class.java).notify(
+            NOTIFICATION_ID,
+            notification(entry.title, "Building the seek index…", 0, 0),
+        )
     }
 
     private fun notifyProgress(entry: Downloads.Entry, written: Long) {
