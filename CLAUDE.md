@@ -17,6 +17,12 @@ report position → tear down, on the real handset against a real server.**
 **Phase 3 adds the details page, subtitles, quality, search and downloads —
 including offline playback with both radios switched off.**
 
+**Shipped as v1.0.0 on 2026-07-31**, public at
+**https://github.com/jackharvest/FlipFlex**. `README.md` is the landing page and
+is written for someone who has never seen the phone; this file is written for
+whoever has to change the code. Read *Shipping it* below before cutting another
+release — the signing key is the one thing here that cannot be replaced.
+
 Navigation has two rules that are not obvious from the code and are load-bearing
 for everything else: **left is a second Back** on every screen but the player,
 and **up walks list → tab strip → the `‹ Title` header**, where OK also goes up
@@ -78,6 +84,18 @@ on a server you own, `grandparentRatingKey` on a movie. This stored `"null"` as
 the account token and walked past the sign-in screen entirely. `plex/Json.kt`
 exists for this; use `str()`/`strOrNull()` and grep for `optString` before
 merging.
+
+**Plex HTML-escapes its JSON, so every string needs unescaping.**
+`plex.tv/api/v2/user` reports an account called *Alice & Bob* as
+`"title": "Alice &amp; Bob"` — the server escapes user-visible strings as if
+they were going into an HTML page, and does it in the JSON as well as the XML.
+JSON needs none of that, so a client that takes the value at face value paints
+the entity. It showed up on the splash and would equally have hit every film
+with an ampersand or an apostrophe in its name. `Json.unescape` handles it, at
+the same `str()`/`strOrNull()` choke point as the `optString` problem. **It is
+one left-to-right pass on purpose** — a chain of replacements expands `&amp;lt;`
+to `&lt;` and then to `<`, so a title that really did contain `&lt;` comes out
+as a tag.
 
 **`X-Plex-Platform: Android` cannot ask for a file.** The universal transcode
 endpoints are served per client profile, and the built-in Android profile has no
@@ -249,6 +267,7 @@ tools/backup.sh critical        # ~2 min, enough to un-brick
 tools/backup.sh full            # ~1-2 h, the shareable flash.bin
 tools/setup-mtkclient.sh        # rebuild vendor/mtkclient from scratch
 tools/build.sh [install|run]    # the APK; sets JAVA_HOME so gradlew works
+tools/release.sh [publish]      # signed release APK, tag, GitHub release
 tools/usb-plex.sh <ip> [stop]   # reach the LAN Plex server over USB, not Wi-Fi
 tools/install-menu-overlay.sh   # the Menu entry, as a Magisk module. Reboots
 tools/install-menu-overlay.sh --verify   # after the reboot: is the overlay on?
@@ -259,6 +278,53 @@ ADB was enabled by dialling `*#*#33284#*#*`. **This is a resource that an OTA
 can take away** — flip2 issue #42 reports newer TCL builds disabling that code.
 `com.tcl.fota.system` is therefore `disabled-user`; re-enable with
 `adb shell pm enable com.tcl.fota.system` if you ever want updates back.
+
+## Shipping it — the release key is the irreplaceable part
+
+The repo is public at **https://github.com/jackharvest/FlipFlex** and the APK is
+a GitHub release asset. `tools/release.sh` reads the version out of
+`app/build.gradle.kts` so the tag, the file name and the string on Settings →
+Help cannot disagree; run it with no argument to build and verify, `publish` to
+tag and push.
+
+**The keystore lives in `~/.flipflex/`, not in the repo — not even gitignored
+inside it.** A file that is not in the tree cannot be `git add -f`ed by mistake,
+and this is the one file here whose loss is permanent: Android identifies an app
+by its signature, so an APK signed with a different key **cannot** be installed
+over one already on a phone. The only way past that is an uninstall, which takes
+the Plex token and every downloaded episode with it. Back `~/.flipflex/` up
+somewhere that is not this laptop.
+
+That migration has already been paid once: the handset ran a debug-signed build
+until 2026-07-31, so going to the release key needed an uninstall. The data was
+carried across by hand and it is worth writing down, because the ownership step
+is the one that is easy to miss —
+
+```sh
+adb shell 'su -c "cp -a /data/data/<pkg> /data/local/tmp/ff-data"'
+adb uninstall <pkg> && adb install app-release.apk
+adb shell 'su -c "stat -c %u /data/data/<pkg>"'     # a NEW uid, e.g. 10108 -> 10109
+adb shell 'su -c "rm -rf /data/data/<pkg>/* &&
+                  cp -a /data/local/tmp/ff-data/. /data/data/<pkg>/ &&
+                  chown -R <newuid>:<newuid> /data/data/<pkg> &&
+                  restorecon -R /data/data/<pkg>"'
+```
+
+A reinstall gets a new uid, so a straight copy-back leaves every file owned by
+an app that no longer exists and the app sees an empty library. `restorecon`
+puts the SELinux labels back; without it the files are there and unreadable.
+
+**Never do this again if it can be avoided.** `adb install -r` with the same key
+keeps the data by itself.
+
+Screenshots and GIFs for the README are in `docs/media/`, captured with
+`adb exec-out screencap` and `adb shell screenrecord` and converted with
+`ffmpeg`. Two notes if they are ever regenerated: `screenrecord --size 320x240`
+is needed for the player, or the landscape content arrives letterboxed inside a
+240x320 frame; and the **server name and the Plex profile name must not appear**
+— the ones in `docs/media/` were taken with `server_name` and `profile_name`
+temporarily replaced in `shared_prefs/flipflex.xml`, because the splash and every
+home-screen header display them.
 
 ## The unlock, and why we are not following the wiki
 

@@ -36,7 +36,22 @@ install | run)
 	# -r keeps app data across reinstalls, which matters here: the Plex token
 	# lives in SharedPreferences and re-linking means typing a PIN into
 	# plex.tv/link again on another machine every single build.
-	adb install -r "$APK"
+	#
+	# A phone carrying a release build will refuse this one, because Android
+	# identifies an app by its signature and the debug key is not the release
+	# key. The message it gives says INSTALL_FAILED_UPDATE_INCOMPATIBLE and
+	# nothing about which build is which, so say it here instead -- and do not
+	# offer to uninstall, because that silently discards the login and every
+	# downloaded episode.
+	if ! adb install -r "$APK"; then
+		echo >&2
+		echo "If that said UPDATE_INCOMPATIBLE, the phone has the RELEASE build" >&2
+		echo "on it and this is a debug one. They are signed with different keys." >&2
+		echo "Either build a release (tools/release.sh) and 'adb install -r' that," >&2
+		echo "or uninstall first -- which throws away the Plex token and the" >&2
+		echo "downloads. See 'Shipping it' in CLAUDE.md before uninstalling." >&2
+		exit 1
+	fi
 	;;
 esac
 

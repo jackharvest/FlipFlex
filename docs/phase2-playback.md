@@ -2,9 +2,15 @@
 
 **Live runbook. Update the status line after every step.**
 
-> **STATUS: THE FULL PATH IS PROVEN.** Sign in → find server → browse →
-> transcode → decode → report position → tear down. Measured on the real 4058G
-> against a real server on 2026-07-30, not in an emulator.
+> **STATUS: SHIPPED. v1.0.0, public, signed, 2026-07-31.** The full path is
+> proven — sign in → find server → browse → transcode → decode → report position
+> → tear down — measured on the real 4058G against a real server, not in an
+> emulator. Seven rounds of that measurement are tabulated below.
+>
+> The handset now runs the **release-signed** build. Do not build a debug APK
+> over it: the signatures differ, the install is refused, and the only way past
+> that costs the Plex token and 234 MB of downloads. `tools/build.sh install`
+> builds debug. Use `tools/release.sh` and `adb install -r` on its output.
 >
 > Everything below the "What is proven" table is either a trap that cost time or
 > a decision with a reason. Read those before changing the corresponding code.
@@ -102,6 +108,17 @@ network policies:
 | Search tip | The `EN KT9` line sits under the results while the field has the cursor, and gives its two rows back when the cursor moves into them |
 | The tour | Twelve steps; the new ones light the back arrow with the pad's left/right, and the digits |
 | Home | No `Reorder libraries` row. It is in Options, where it always also was |
+
+Round seven, on the handset on 2026-07-31. Shipping it — v1.0.0, signed, public:
+
+| Step | Evidence |
+|---|---|
+| Release signing | 4096-bit RSA, `apksigner verify` reports v2 scheme true, one signer, `sha256 c004e159…` |
+| Key migration | Debug-signed install uninstalled, release APK installed, 234 MB of app data carried across by hand; cold start came back with the token, both downloads and `Downloads · 244 MB · 2` |
+| Version | Settings → Help reads `FlipFlex 1.0.0`; `versionCode` 2 |
+| HTML entities | Profile switcher lists two Plex Home profiles whose names contain an ampersand. Both read `&amp;` before the `Json.unescape` fix |
+| Download, start to finish | Queued from a details page, `IN PROGRESS · Downloading · 38 MB` with a bar, finished as a 118 MB `.mkv` with no `.part` left behind |
+| Media capture | 37 screenshots and 6 GIFs in `docs/media/`, all with the server name and profile name replaced in prefs first |
 
 ## The traps, in the order they cost time
 
