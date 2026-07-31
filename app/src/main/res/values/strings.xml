@@ -13,7 +13,18 @@
 
     <string name="home_continue">Continue Watching</string>
     <string name="home_recent">Recently Added</string>
+    <string name="home_downloads">Downloads</string>
     <string name="home_settings">Settings</string>
+    <string name="home_offline_note">The server is not reachable</string>
+
+    <string name="downloads_empty">Nothing downloaded yet.\n\nOpen anything and choose\nDownload to keep a copy\non this phone.</string>
+
+    <!-- Search. The prompt says which key got you here because the green call
+         button is not a key anyone expects an app to own, and a screen that
+         appears when you press it is only useful if you know why. -->
+    <string name="search_title">Search</string>
+    <string name="search_hint">Type a title</string>
+    <string name="search_prompt">Type at least two letters.\n\nThe green call key opens\nthis from anywhere.</string>
 
     <!-- The three library views, as Plex names them. Kept short: three of them
          share a 240dp row, so ~13 characters each is the whole budget. -->

@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The phone's Menu, with FlipFlex added to the end of it.
+
+     THIS IS THE ONLY WAY A SIDELOADED APP REACHES THAT SCREEN. TCL's Launcher3
+     does not enumerate installed apps: it walks this array and matches each
+     entry against the installed set, dropping anything it does not find. So an
+     app can declare MAIN/LAUNCHER, have `cmd package resolve-activity` resolve
+     it, and still be invisible — which is exactly what FlipFlex and Magisk both
+     were. The nine rows the stock Menu shows are the nine entries below that
+     happen to be installed.
+
+     The first nine entries are the stock array reproduced verbatim, read out of
+     /system/priv-app/Launcher3/Launcher3.apk. Only the tenth is ours. Three
+     things about the loop that reads it are load-bearing, and all three come
+     from Launcher.bindAllApplications, decompiled rather than guessed at:
+
+     ITEM 4 IS OVERWRITTEN BEFORE THE LOOP RUNS.
+
+         stringArray[4] = getResources().getString(R.string.def_appmenu_position_five);
+
+     That resolves to `com.android.music` on this build. The value below matches
+     it so the array reads honestly, but nothing here can change position five.
+
+     AN ENTRY IS TREATED AS A PACKAGE NAME ONLY IF IT STARTS WITH "com" OR "org".
+
+         if (!str.startsWith("com") && !str.startsWith("org")) { ...special... }
+         else { ...match against installed packages... }
+
+     This is why the app is now `com.github.jackharvest.flipflex` and not
+     `io.github.jackharvest.flipflex`. The first build of this overlay used the
+     io. name and the entry did not fail — it fell down the *other* branch and
+     was rendered as a second, iconless "Tools" folder pointing at
+     ToolsNewActivity. A silent wrong answer, not an error.
+
+     "Tools" IS THAT OTHER BRANCH, USED ON PURPOSE. It is the one entry here
+     that is not a package: it opens the folder holding Recorder, Calendar,
+     Clock, Note, Calculator and Email. In the stock array it is a reference to
+     Launcher3's private @string/tools_key; it is a literal here because aapt2
+     cannot resolve a private cross-package reference without the target APK on
+     the build classpath. Both resolve to the same string, because
+     getStringArray flattens references — verified on the handset, the folder
+     still opens.
+
+     The cost of that literal is precise and worth stating: it pins the folder's
+     label to English. On a handset set to another language the launcher would
+     compare its own localised string against this one, not match, and Tools
+     would turn into a nameless duplicate of itself. That is the line to fix if
+     FlipFlex is ever used on a non-English device.
+
+     The two carrier unlock apps are kept even though neither is installed here.
+     They are dead weight on this unit, but the att/cricket carve-out further
+     down that same loop reads them back, and a faithful copy of the stock array
+     is one less thing to have got subtly wrong. -->
+<resources>
+    <string-array name="allapp_list">
+        <item>com.android.dialer</item>
+        <item>com.android.mms</item>
+        <item>com.android.contacts</item>
+        <item>com.android.gallery3d</item>
+        <item>com.android.music</item>
+        <item>com.tcl.camera</item>
+        <item>org.chromium.chrome</item>
+        <item>Tools</item>
+        <item>com.android.settings</item>
+        <item>com.att.deviceunlock</item>
+        <item>com.cricketwireless.deviceunlock</item>
+        <item>com.github.jackharvest.flipflex</item>
+    </string-array>
+</resources>

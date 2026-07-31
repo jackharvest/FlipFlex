@@ -112,7 +112,12 @@ dedicated back arrow next to `*` is an ordinary `KEYCODE_BACK`, so it is the
 natural in-app Back and needs no special handling.
 
 **`CALL` is fully delivered** and can be consumed before the dialer sees it. It
-is the one genuinely spare hardware key we have.
+is the one genuinely spare hardware key we have, and it is now Search — which is
+the thing that makes search worth having at all, since the alternative is a row
+on the home screen three presses from anywhere you would want to search from.
+
+It must be caught in `dispatchKeyEvent`. By the time an unhandled key reaches
+`onKeyDown` the framework has decided to open the dialer, and the app disappears.
 
 ## NOT delivered — do not design around these
 
@@ -179,7 +184,7 @@ softkey bar as `Back | Select`.
 | D-pad ←/→ in the player | Seek ∓15 s |
 | D-pad ↑/↓ in the player | Seek as well, in whichever direction the current rotation points them |
 | Volume rocker | Not consumed. The system's own handling is what users expect |
-| `CALL` | The one genuinely spare key. Unbound, but reserved — it must be caught in `dispatchKeyEvent` or the dialer takes it |
+| `CALL` | **Search**, from every screen but the player. Caught in `dispatchKeyEvent`, or the dialer takes it |
 | `*` `#`, digits | Page up/down in a list; digits are the PIN pad. Otherwise unbound |
 
 **A rotated screen breaks the printed labels, and the code has to know.** The

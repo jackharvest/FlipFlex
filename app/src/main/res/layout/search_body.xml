@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The search screen: a field, a rule, and the results under it.
+
+     The field is an ordinary EditText on purpose. This handset ships a real
+     system IME — com.iqqijni.dvt912key, a 12-key keyboard with T9 and
+     prediction — and it is the one input advantage a flip phone has over the
+     handheld PocketFlex runs on. Drawing our own letter grid would throw that
+     away and be worse at it. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <EditText
+        android:id="@+id/search_field"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/ff_surface"
+        android:hint="@string/search_hint"
+        android:imeOptions="actionSearch"
+        android:inputType="text"
+        android:maxLines="1"
+        android:paddingHorizontal="8dp"
+        android:paddingVertical="5dp"
+        android:textColor="@color/ff_text"
+        android:textColorHint="@color/ff_text_dim"
+        android:textCursorDrawable="@null"
+        android:textSize="13sp" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/ff_rule" />
+
+    <FrameLayout
+        android:id="@+id/search_results"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <!-- The empty state lives inside the results area, not in the shell's
+             content_message. That one covers the whole content frame, which on
+             this screen includes the field the user is typing into. -->
+        <TextView
+            android:id="@+id/search_message"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:paddingHorizontal="14dp"
+            android:textColor="@color/ff_text_dim"
+            android:textSize="11sp"
+            android:visibility="gone" />
+    </FrameLayout>
+</LinearLayout>

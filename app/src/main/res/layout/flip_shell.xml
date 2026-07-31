@@ -64,11 +64,18 @@
         android:layout_weight="1">
 
         <!-- Empty/error text, centred. Shares the frame with whatever the
-             screen puts here. -->
+             screen puts here.
+
+             The opaque background is not decoration. showTransientMessage draws
+             this over a list that is still there — "that shuffle found nothing",
+             "this file has no subtitle tracks" — and without a background the
+             remark lands on top of the rows and neither is readable. It looked
+             fine for as long as the only messages were on empty screens. -->
         <TextView
             android:id="@+id/content_message"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            android:background="@color/ff_ground"
             android:gravity="center"
             android:paddingHorizontal="16dp"
             android:textColor="@color/ff_text_dim"

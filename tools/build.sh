@@ -23,7 +23,7 @@ export JAVA_HOME
 }
 
 APK=app/build/outputs/apk/debug/app-debug.apk
-PKG=io.github.jackharvest.flipflex
+PKG=com.github.jackharvest.flipflex
 
 # "$@" is NOT passed through: the arguments to this script are install/run, and
 # handing those to Gradle makes it fail with "task 'install' not found" while

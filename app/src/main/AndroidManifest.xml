@@ -5,6 +5,13 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- A download of a 40-minute episode takes minutes, and the user will
+         close the lid partway through — which backgrounds the app, and a
+         backgrounded process on API 30 has a few minutes at most before the
+         platform may stop it. A foreground service is the only arrangement
+         that survives that. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
     <!-- The handset has no touchscreen worth speaking of and is driven entirely
          by the keypad. Declaring this stops the build system assuming a
          touch-first device and documents the input model for anyone reading. -->
@@ -12,7 +19,7 @@
 
     <application
         android:allowBackup="false"
-        android:icon="@drawable/ic_launcher"
+        android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="false"
         android:theme="@style/Theme.FlipFlex"
@@ -58,6 +65,37 @@
             android:screenOrientation="portrait"
             android:configChanges="keyboardHidden|orientation|screenSize" />
 
+        <!-- The page between choosing something and watching it: description,
+             what the file is, subtitle and audio tracks, download. -->
+        <activity
+            android:name=".ui.DetailActivity"
+            android:screenOrientation="portrait"
+            android:configChanges="keyboardHidden|orientation|screenSize" />
+
+        <!-- keyboardHidden is deliberately NOT in configChanges here, unlike
+             every other screen. This is the one activity with a text field, and
+             the system IME appearing is a configuration change we want the
+             platform to handle normally rather than swallow. -->
+        <activity
+            android:name=".ui.SearchActivity"
+            android:screenOrientation="portrait"
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize" />
+
+        <activity
+            android:name=".ui.DownloadsActivity"
+            android:screenOrientation="portrait"
+            android:configChanges="keyboardHidden|orientation|screenSize" />
+
+        <!-- dataSync is only mandatory from API 34, and this app is API 30
+             only. Declared anyway because it is the honest description of what
+             the service does, and because an undeclared type is the kind of
+             thing that becomes fatal in a later platform release. -->
+        <service
+            android:name=".dl.DownloadService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
         <!-- The only landscape screen in the app. A 16:9 video across the 320
              axis is 320x180 instead of 240x135, which is 1.8x the picture area
              on a panel where the picture is the whole experience.
@@ -82,7 +120,7 @@
              the keypad in Phase 1 and corrected the stock .kl files; it is worth
              having when a future build or a replaced keypad needs re-measuring.
              Launch it explicitly:
-               adb shell am start -n io.github.jackharvest.flipflex/.probe.ProbeActivity -->
+               adb shell am start -n com.github.jackharvest.flipflex/.probe.ProbeActivity -->
         <activity
             android:name=".probe.ProbeActivity"
             android:exported="true"

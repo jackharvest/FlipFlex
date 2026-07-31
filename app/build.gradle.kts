@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "io.github.jackharvest.flipflex"
+    namespace = "com.github.jackharvest.flipflex"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "io.github.jackharvest.flipflex"
+        applicationId = "com.github.jackharvest.flipflex"
         // minSdk and targetSdk are both 30 because the only device this app will
         // ever run on is a TCL 4058G on AOSP 11 (API 30). Targeting higher would
         // opt us into behaviour changes for platforms that do not exist here.

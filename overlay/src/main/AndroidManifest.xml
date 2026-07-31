@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shape copied from TCL's own /product/overlay/Launcher3-overlay.apk, which
+     was decompiled to check rather than guessed at. Its manifest declares
+     exactly these attributes and nothing else: targetPackage, priority,
+     isStatic, an empty application tag and a uses-sdk.
+
+     That file is also the proof this approach works at all on this handset —
+     the framework is already running one static overlay against this exact
+     target package, and `cmd overlay list` shows it enabled. It overlays only
+     the four wallpapers, so there is nothing for us to collide with.
+
+     No android:targetName, and deliberately so: a named overlay may only touch
+     resources the target has published in an overlayable block, and Launcher3
+     publishes none. An unnamed overlay in a system partition may set any
+     resource, which is what reaching a private string-array requires. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <overlay
+        android:targetPackage="com.android.launcher3"
+        android:isStatic="true"
+        android:priority="10" />
+
+    <application android:hasCode="false" />
+</manifest>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Status bar icon for the download notification. White and flat because the
+     platform tints and masks a small icon to a silhouette: anything with colour
+     or interior detail arrives as a solid blob. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFFFF">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M11,3h2v8h4l-5,6 -5,-6h4z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M4,19h16v2h-16z" />
+</vector>

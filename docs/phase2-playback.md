@@ -28,6 +28,21 @@ Each of these was verified against the server, not just by the app looking happy
 The resume point then came back round: reopening Continue Watching showed
 *Queen of Tears · 1h 24m left* with a progress bar, read from the server.
 
+Round three, measured the same way on 2026-07-30. This is the details page,
+subtitles, quality, search and downloads:
+
+| Step | Evidence |
+|---|---|
+| In the Menu | FlipFlex is item 10 of the phone's Menu, launches from there. See `launcher-menu.md` |
+| Details page | *Ship of Ghouls* — show, S1·E6, 1985, 22m left, TV-PG; `720p · H264 · 1.7 Mbps → 320x240 800 kbps`; summary; Play/Resume; subtitle, audio, quality and download rows |
+| Search | Green call key from any screen; "scooby" returned a grouped `SHOWS` hub; "awkward" returned `SHOWS` + `EPISODES` |
+| Search → details | Result opens the details page, which opens the player |
+| Subtitles | Burned in and legible at 125% on the real panel, mid-episode |
+| Download | 54 MB Matroska for a 23-minute episode at 240x180/320 kbps, `.part` renamed on success |
+| Downloads library | Home row `Downloads · 54 MB · 1` → `SHOWS` → *My Awkward Senpai · 1 episode* |
+| **Offline playback** | Wi-Fi **and** mobile data off: details page says "Saved on this phone", Play decodes on `OMX.MTK.VIDEO.DECODER.AVC` from local storage |
+| Offline home | Cold start with both radios off gives Downloads + Settings, and **the token survives** |
+
 Round two of feedback, measured the same way on 2026-07-30:
 
 | Step | Evidence |
@@ -70,6 +85,57 @@ and then vanishing.
 
 **`plex/Json.kt` exists solely for this.** Use `str()` / `strOrNull()`. There
 should be no `optString` call anywhere in `plex/`; grep for it before merging.
+
+### `X-Plex-Platform: Android` cannot ask for a file
+
+Downloads fetch `start.mkv` with `protocol=http`, which is one continuous
+Matroska stream rather than a playlist. Under the platform we claim for
+streaming, that is a bare 400 with 89 bytes of HTML and no reason.
+
+Measured against 1.43.2, every probe bracketed by a `state=stopped` timeline:
+
+| Platform | Endpoint | Result |
+|---|---|---|
+| `Android` | `start.mkv` + `protocol=http` | **400** |
+| `Android` | `start.m3u8` + `protocol=hls` | 200 |
+| `Chrome` | `start.mkv` + `protocol=http` | **200, 49 MB of Matroska** |
+| `Chrome` | `start.m3u8` + `protocol=hls` | 200 |
+
+The universal transcode endpoints are served per client profile, and the
+built-in Android profile has no single-file form — Plex's own Android app
+streams HLS and downloads through a different mechanism entirely. So streaming
+keeps `Android` and **downloads claim `Chrome`** (`PlexClient.PLATFORM_FILE`).
+The header and the query string must agree; the download service passes the
+platform to `PlexClient.headers` for exactly that reason.
+
+**The bracketing is not optional, and getting it wrong is how this was nearly
+mis-diagnosed.** Run the four combinations back to back and they contradict each
+other, because of the item-scoped stale session below: the second probe of any
+pair fails whatever platform it claims. The first matrix run here reported
+`Chrome`+`mkv` as 200 and then as 400 within a minute, which reads like a flaky
+server and is not.
+
+### A failed request is not a rejected token
+
+`PlexAuth.validate` returned `String?`. Null meant *both* "plex.tv refused this
+token" and "plex.tv could not be reached", and `SplashActivity` responded to null
+by calling `signOut()`.
+
+So **opening the app with no network wiped the stored token and demanded a
+re-link at plex.tv/link** — on a handset whose entire offline feature is a folder
+of downloads to watch on a train. Reproduced exactly that way: Wi-Fi off, mobile
+data off, cold start, sign-in screen, token gone from prefs. Recovering needs a
+second device with a browser, so from where the user is standing it is not
+recoverable at all.
+
+`PlexClient.reply` now keeps the distinction (`code == NO_REPLY` means nothing
+answered) and `validate` returns `Ok` / `Rejected` / `Unreachable`. **Only
+`Rejected` discards anything**, and only 401 and 403 produce it — a 5xx is
+plex.tv's problem, not the token's. `Unreachable` goes straight to Home, which
+draws the Downloads library.
+
+The general rule this is an instance of: *a token must only ever be thrown away
+because a server said to.*
 
 ### Kotlin block comments nest
 
@@ -372,16 +438,93 @@ Also note the timeline call **requires `X-Plex-Client-Identifier`**. Without it
 the server answers 400 and the session is not cleared. The app sends it as a
 header; a hand-rolled `curl` reproduction will not unless you add it.
 
+## The details page, and what it changed
+
+Choosing a playable item now opens `DetailActivity` rather than starting a
+transcode. It carries the description, `1080p H.264 · 3.3 Mbps → 320x240 800
+kbps`, the subtitle and audio tracks, the quality preset and the download
+control.
+
+**It is one list, not a poster with controls under it.** A summary is four to
+six wrapped lines at 10sp, which is most of a 270dp content area, so the prose
+and the actions cannot both be permanently visible — and a scrolling text view
+above a list means two things competing for the down key with nothing on screen
+saying which has it. `RowList.Row.isBlurb` is prose rendered as an unselectable
+row, so there is one cursor and one meaning for every key.
+
+That produced a bug worth keeping the fix for. The cursor lands on the first
+*selectable* row, which here is three paragraphs down, and `submit` used to
+scroll to the selection — so the one screen whose job is to show a description
+opened with the description off the top of the screen. The grouped Settings list
+lost its first caption the same way. `RowList.submit` now scrolls to 0 whenever
+everything above the cursor is unselectable, which is a property of the rows
+rather than of `keepSelection`, and fixes both.
+
+**Subtitles are per item and server-side.** Choosing a track sends
+`subtitleStreamID` to `/library/parts/<id>?allParts=1`, which is how Plex itself
+stores it and why the choice follows you to a TV. That means an episode can have
+a track selected from another client while this phone's global switch is off — so
+`PlayerActivity.intent` takes a nullable `burnSubtitles` and the details page
+passes a real value. Without it the page said "Subtitles: English" and then
+played without any.
+
+## Downloads
+
+`protocol=http` against `start.mkv` gives one continuous Matroska file, exactly
+as PocketFlex's `dlworker.sh` does. A foreground service fetches one at a time —
+not for lack of threads, but because each one is a live transcode on the server,
+and three concurrent transcodes on a home NAS is how the bare 400 above happens.
+
+**Nothing is resumable.** The endpoint serves one continuous stream and honours
+no byte ranges, so an interrupted transfer can only be discarded. Everything is
+arranged around that: the file is written to `.part`, the `.part` is deleted on
+any path that is not a clean finish, and `Downloads.recover` puts a row left
+saying `downloading` back to `queued` at startup.
+
+**Size is the only honest success test.** Plex closes the stream cleanly when
+its transcoder falls over, so the connection reports success and what lands is a
+valid, tiny, unplayable file. Anything under 256 kB is a failure.
+
+**The index carries the hierarchy rather than pointing at it.** Show, season and
+`S01E04` are copied onto every row when it is queued. That duplication is the
+whole feature: the Downloads library has to be browsable with the radio off, and
+an index that needed `/library/metadata` to work out which season an episode
+belongs to would only work when you did not need it. Episodes sort by that code,
+never by title — "Episode 10" sorts before "Episode 2".
+
+**Home degrades rather than failing.** With no server and at least one download,
+the home screen is Downloads plus Settings instead of "Cannot reach Plex".
+
+## Search is on the green call key
+
+`CALL` is the one genuinely spare hardware button, and it has to be consumed in
+`dispatchKeyEvent` or the dialer takes it. It opens search from every screen
+except the player, where leaving would tear down ExoPlayer and the transcode
+mid-episode.
+
+PocketFlex deliberately has no search, and was right: on a Miyoo Mini, typing a
+title off an on-screen grid is slower than scrolling to it. This handset ships a
+real system IME — `com.iqqijni.dvt912key`, T9 with prediction, the only enabled
+input method on the device — so the field is a plain `EditText` and nothing more.
+
+**`clearFocus()` does not move focus, and that cost an evening.** The field is
+the only focusable view on the screen, so Android has nowhere else to put focus
+and hands it straight back: the caret stayed, the IME stayed attached, and every
+OK press was swallowed before it reached `onKeyDown`. The cursor moved through
+the results and choosing one did nothing. The fix is `list.requestFocus()` —
+focus has to be *given* somewhere, not taken away. The rows themselves stay
+unfocusable, so the D-pad still reaches `onKeyDown` the way it does everywhere
+else.
+
+`/hubs/search` rather than `/search`, because it comes back already grouped and
+those groups map straight onto the captioned rows the list already draws.
+
 ## Still open
 
-- [ ] **Downloads and offline playback** — the big one, and its own phase. Needs
-      a foreground service, storage management, an offline metadata cache and a
-      local-file path through the player. PocketFlex's `dlworker.sh` is the
-      model: `protocol=http` against `start.mkv` gives one continuous file.
-- [ ] Direct play for files the MT6739 can decode, skipping the transcoder
-- [ ] Subtitles — ExoPlayer can render a soft track, so no burn-in needed
-- [ ] Audio track selection (dub vs original)
-- [ ] Search
+- [ ] Direct play for files the MT6739 can decode, skipping the transcoder.
+      Worth less than it sounds on a 240-wide panel: it would pull a 1080p file
+      across the radio to draw it into 320x180, costing more bandwidth and more
+      battery for the same picture. What it saves is the server's transcoder
 - [ ] Music, and the Now Playing screen from the art
 - [ ] **Autoplay next episode — and with it, shuffle as a *queue*.** Shuffle
       currently plays *one* random thing and stops at the end of it, because
@@ -390,5 +533,25 @@ header; a hand-rolled `curl` reproduction will not unless you add it.
       expects a shuffled run. Both need the same thing: a list of ratingKeys in
       the player and an advance on end, which has to close out the finished
       item's session before preflighting the next — see the item-scoped stale
-      session trap above, which is exactly what an advance would trip over
-- [ ] Quality/bitrate settings, and Wi-Fi-only guards
+      session trap above, which is exactly what an advance would trip over.
+      `Downloads` already carries `code`, so the offline version of this can
+      find the next episode without a server
+- [ ] A landing-page redesign — the user has an idea for it and it is next
+- [ ] Downloads have no storage ceiling. PocketFlex keeps a 300 MB floor free
+      because a full SD card is unrecoverable from the device; /data here has
+      11 GB and no such guard yet
+- [x] ~~Downloads and offline playback~~
+- [x] ~~Subtitles~~ — burned in, not soft. See the note below
+- [x] ~~Audio track selection (dub vs original)~~
+- [x] ~~Search~~
+- [x] ~~Quality/bitrate settings, and Wi-Fi-only guards~~
+
+### Subtitles: burned in, and why the earlier note was wrong
+
+The line that used to sit in this list said ExoPlayer can render a soft track so
+no burn-in is needed. It can — for text formats. It cannot draw PGS or VOBSUB at
+all, which is what a Blu-ray rip carries, so a soft path would work on part of a
+library and silently do nothing on the rest. Everything here is already being
+transcoded, so `subtitles=burn` costs nothing extra and gives one behaviour for
+every file. `subtitleSize` is a setting because Plex's 100 is sized for a
+television; 125 is the default and is legible on the real panel.

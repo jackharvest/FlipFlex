@@ -6,12 +6,21 @@ and is where all the Plex protocol knowledge came from.
 
 Read `docs/phase2-playback.md` first — it is the live runbook and says exactly
 where we are. `docs/phase0-unlock.md` is the closed unlock phase, kept because
-its recovery table still matters. This file is the things that cost time to
-discover. `docs/keymap.md` has the keypad as measured, plus what FlipFlex binds
-each key to.
+its recovery table still matters. `docs/launcher-menu.md` is how the app gets
+into the phone's Menu, which took a resource overlay and a package rename. This
+file is the things that cost time to discover. `docs/keymap.md` has the keypad
+as measured, plus what FlipFlex binds each key to.
 
 **Phase 2 is proven: sign in → find server → browse → transcode → play →
 report position → tear down, on the real handset against a real server.**
+**Phase 3 adds the details page, subtitles, quality, search and downloads —
+including offline playback with both radios switched off.**
+
+**The package is `com.github.jackharvest.flipflex`.** It was
+`io.github.jackharvest.flipflex` until the launcher work, and the rename is not
+cosmetic: TCL's Launcher3 only treats an entry as a package name if it starts
+with `com` or `org`, so the `io.` name could never appear in the Menu. See
+`docs/launcher-menu.md`.
 
 The unlock work is also published, scrubbed of anything unit-specific, at
 **https://github.com/jackharvest/tcl-flip-macos-unlock** — tools plus a
@@ -38,9 +47,15 @@ Three of those killed risks that were in the original plan:
 
 - **Density is 160.** The row layout gets the full 240×320 dp. Had TCL shipped
   240 dpi it would have been 160×213 and every measurement would have halved.
-- **The launcher is stock Launcher3**, not a TCL shell, so a sideloaded app will
-  appear in the drawer. The "register as `category.HOME`" fallback is insurance,
-  not the plan.
+- ~~**The launcher is stock Launcher3**, not a TCL shell, so a sideloaded app
+  will appear in the drawer.~~ **Wrong, and it was expensive.** `HOME` does
+  resolve to `com.android.launcher3`, but the build is a TCL fork that never
+  enumerates installed apps: it walks a hardcoded `allapp_list` array of package
+  names and drops everything not in it. A sideloaded app appears nowhere but
+  Recent Apps, however correct its manifest — Magisk is invisible for the same
+  reason. The fix is a runtime resource overlay shipped as a Magisk module,
+  plus a package name starting with `com`. See `docs/launcher-menu.md`, and do
+  not reason about this launcher from AOSP's.
 - **32-bit only.** Nothing we ship needs native code (Media3's core is pure Java
   over MediaCodec), but it means an arm64 emulator is *not* ABI-faithful, and
   any future native dependency must ship `armeabi-v7a`.
@@ -56,6 +71,36 @@ on a server you own, `grandparentRatingKey` on a movie. This stored `"null"` as
 the account token and walked past the sign-in screen entirely. `plex/Json.kt`
 exists for this; use `str()`/`strOrNull()` and grep for `optString` before
 merging.
+
+**`X-Plex-Platform: Android` cannot ask for a file.** The universal transcode
+endpoints are served per client profile, and the built-in Android profile has no
+single-file form: `start.mkv` with `protocol=http` answers a bare 400 with 89
+bytes of HTML. `Chrome` serves the same request 49 MB of Matroska. HLS works
+under both. So streaming keeps `Android` (honest, and what makes the server's
+session list say `FlipFlex`) and **downloads claim `Chrome`** —
+`PlexClient.PLATFORM_FILE`. Header and query string must agree.
+
+Measuring this needs care: run the four combinations back to back and the
+results contradict each other, because Plex refuses a new transcode for an item
+it thinks still has a live session and that refusal is item-scoped. Bracket
+every probe with a `state=stopped` timeline or the second reading of any pair is
+about the session, not the platform.
+
+**Subtitles are burned in, not soft.** An earlier note said ExoPlayer could
+render a soft track so no burn-in was needed. It can — for text formats. It
+cannot draw PGS or VOBSUB at all, which is what a Blu-ray rip carries, so a soft
+path would work on part of a library and silently do nothing on the rest.
+Everything is already transcoded, so `subtitles=burn` costs nothing extra and
+gives one behaviour for every file. `subtitleSize` is a setting because Plex's
+100 is sized for a television.
+
+**A failed network call is not a rejected login.** `PlexAuth.validate` used to
+return `String?`, where null meant both "plex.tv refused this token" and "plex.tv
+could not be reached" — and `SplashActivity` signed out on null. So **opening
+the app with no network wiped the token**, on a device whose whole offline story
+is a folder of downloads for a train. It returns a three-way `Validation` now,
+and only `Rejected` discards anything. Recovering from the old behaviour needs a
+second device with a browser, so it is not a small bug.
 
 **Kotlin block comments nest.** A literal slash-star inside a KDoc — as in a
 path like `transcode/universal/<star>` — opens a nested comment that never
@@ -140,6 +185,10 @@ tools/mtk printgpt              # mtkclient, correct interpreter and cwd
 tools/backup.sh critical        # ~2 min, enough to un-brick
 tools/backup.sh full            # ~1-2 h, the shareable flash.bin
 tools/setup-mtkclient.sh        # rebuild vendor/mtkclient from scratch
+tools/build.sh [install|run]    # the APK; sets JAVA_HOME so gradlew works
+tools/install-menu-overlay.sh   # the Menu entry, as a Magisk module. Reboots
+tools/install-menu-overlay.sh --verify   # after the reboot: is the overlay on?
+tools/install-menu-overlay.sh --remove   # put the Menu back as it was
 ```
 
 ADB was enabled by dialling `*#*#33284#*#*`. **This is a resource that an OTA
