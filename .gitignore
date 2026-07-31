@@ -10,11 +10,25 @@ backups/
 
 # Android / Gradle
 .gradle/
+.kotlin/
 build/
 local.properties
 *.apk
 *.aab
+
+# Release signing. The keystore and the passwords that open it live outside the
+# repo entirely; app/build.gradle.kts reads keystore.properties if it is there
+# and falls back to an unsigned release build if it is not, so a clone builds
+# without them. Losing the keystore means never being able to update the app in
+# place again -- an APK signed by a different key will not install over one
+# signed by this one -- so it is backed up somewhere that is not this machine.
 *.keystore
+*.jks
+keystore.properties
+
+# JetBrains
+.idea/
+*.iml
 
 # Design reference photographed on the handset. 1.7 MB, and its own filename
 # says it is temporary -- it guides the layout work and is deleted when the UI

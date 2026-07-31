@@ -1,6 +1,28 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+}
+
+// Release signing, if this machine has the key.
+//
+// The keystore and its passwords live in ~/.flipflex, never in the repo -- not
+// even gitignored inside it, because the one mistake that cannot be undone here
+// is publishing the key, and a file that is not in the tree cannot be `git add
+// -f`ed by accident. A clone without it still builds: `assembleRelease` just
+// produces an unsigned APK, which is fine for anyone building for themselves,
+// and `installRelease` will tell them so.
+//
+// Why it matters more than usual: Android identifies an app by its signature,
+// so an APK signed with a different key will not install over one signed with
+// this one -- the phone says INSTALL_FAILED_UPDATE_INCOMPATIBLE and the only way
+// out is uninstalling, which takes the downloads and the Plex login with it.
+// Lose this keystore and every existing install is orphaned for ever. Back it
+// up somewhere that is not this laptop.
+val keystoreProperties = Properties().apply {
+    val f = File(System.getProperty("user.home"), ".flipflex/keystore.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
 }
 
 android {
@@ -14,8 +36,13 @@ android {
         // opt us into behaviour changes for platforms that do not exist here.
         minSdk = 30
         targetSdk = 30
-        versionCode = 1
-        versionName = "0.1.0"
+        // versionCode is what the platform compares when deciding whether an
+        // APK is an upgrade; versionName is only ever shown to a human, on
+        // Settings -> Help. Bump both together, and never reuse a versionCode:
+        // the phone refuses to install an APK whose code is lower than the one
+        // already there, and silently keeps the old one if they are equal.
+        versionCode = 2
+        versionName = "1.0.0"
 
         // The MT6739 is 32-bit only: ro.product.cpu.abi=armeabi-v7a with no
         // abilist64. Nothing we ship is native today, but pinning the filter
@@ -24,11 +51,35 @@ android {
         ndk { abiFilters += "armeabi-v7a" }
     }
 
+    signingConfigs {
+        if (keystoreProperties.isNotEmpty()) {
+            create("release") {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.findByName("release")
         }
+    }
+
+    lint {
+        // `ExpiredTargetSdkVersion` fails the release build outright, and it is
+        // the one lint rule here that is not about the code at all: it enforces
+        // Google Play's policy that new uploads target a recent API level. This
+        // app is not on Play and cannot be -- it is sideloaded onto one phone
+        // model whose only Android is 11. Raising targetSdk to satisfy the rule
+        // would opt us into behaviour changes for platform versions this device
+        // will never run, which is the opposite of what we want. See the note on
+        // targetSdk in defaultConfig.
+        disable += "ExpiredTargetSdkVersion"
     }
 
     compileOptions {
