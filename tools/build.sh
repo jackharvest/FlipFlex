@@ -52,6 +52,19 @@ install | run)
 		echo "downloads. See 'Shipping it' in CLAUDE.md before uninstalling." >&2
 		exit 1
 	fi
+	# Restart the launcher, or the Menu entry looks like it has been lost.
+	#
+	# TCL's Launcher3 builds the Menu once, in bindAllApplications, by walking
+	# allapp_list against the app list it was handed at bind time. A reinstall
+	# does not make it rebind, so FlipFlex simply stops being drawn -- the row is
+	# gone while the overlay is still installed and `cmd overlay list` still says
+	# [x], which makes it look like the overlay broke rather than the launcher
+	# going stale. Reported as "the Menu entry disappeared when we moved to 1.0";
+	# a force-stop brought it straight back.
+	#
+	# Safe: Launcher3 is the HOME app, so the system restarts it immediately. It
+	# costs about a second of blank wallpaper.
+	adb shell am force-stop com.android.launcher3 || true
 	;;
 esac
 

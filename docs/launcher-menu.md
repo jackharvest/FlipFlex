@@ -153,6 +153,14 @@ com.android.launcher3
 
 `[x]` is enabled. `---` would be scanned-but-disabled.
 
+**A reinstall makes the row vanish, and the overlay is not the reason.**
+Launcher3 builds the Menu once in `bindAllApplications` and does not rebind when
+a package is replaced, so after `adb install -r` the row is simply not drawn —
+while `cmd overlay list` still says `[x]`, which points the investigation at the
+overlay instead of at the launcher. `adb shell am force-stop
+com.android.launcher3` brings it straight back; `tools/build.sh install` now
+does that for you.
+
 ## The one wart, stated plainly
 
 `allapp_list` item 8 is the literal string `Tools`, where the stock array has a
@@ -167,16 +175,69 @@ language the launcher would compare its own localised string against this one,
 fail to match, and Tools would become a nameless duplicate of itself. That is
 the line to fix if FlipFlex is ever used on a non-English device.
 
-## The icon was a second, separate bug
+## The row has no icon, and it cannot be given one
 
-With the overlay working, the row appeared with **no icon**. The launcher binds
-icons with `imageView.setImageBitmap(appInfo.iconBitmap)`, and the placeholder
-`ic_launcher` was a `<vector>`. A vector has no bitmap to hand over, and TCL's
-icon path produces nothing rather than rasterising it.
+This file used to say the missing icon was a second bug, fixed by shipping real
+PNGs instead of a `<vector>`. **That was wrong.** The PNGs are worth having —
+they are what Recent Apps and Settings draw — but they were never going to
+appear here, and the screenshot in the README has always shown item 10 with an
+empty icon slot. Nothing regressed; it was never right.
 
-Fixed by shipping real PNGs in `mipmap-mdpi` through `mipmap-xxxhdpi`, cropped
-from `img/FlipFlexSplashLogo_240x320.png`. The device is mdpi, so the 48px one
-is the one it actually loads.
+The launcher binds the row with
+
+```java
+imageView.setImageBitmap(appInfo.iconBitmap);   // AllAppsLineAdapter
+```
+
+and no fallback. `appInfo.iconBitmap` is not loaded from the app. It is looked
+up in `mAllAppIconMap`, which `Launcher.updateAllAppIcon` builds by hand:
+
+```java
+mAllAppIconMap.put("com.android.dialer",   getDrawable(R.drawable.allapp_call));
+mAllAppIconMap.put("com.android.mms",      getDrawable(R.drawable.allapp_messages));
+...
+mAllAppIconMap.put("com.android.settings", getDrawable(R.drawable.allapp_settings));
+```
+
+Thirteen `put` calls for the eleven stock entries, and `AppInfo`'s
+`LauncherActivityInfo` constructor never touches `iconBitmap`. A twelfth
+package gets `null` from the map, `setImageBitmap(null)`, and a blank cell.
+
+**An overlay cannot reach it**, because the map's *keys* are compiled into
+`classes.dex`. Four of them are string resources rather than literals —
+`tools_key`, `mediacenter_key`, `myatt_key`, `myLatam_key` — and overlaying one
+of those really would inject a map entry under any key we like. But three sit
+inside a `switch` on `def_appmenu_position_five`, which is `com.android.music`
+on this build and takes the branch that skips all three. The one that does run
+is `tools_key`, and that is the key the **Tools** row itself is looked up under.
+So it can be spent on FlipFlex or on Tools, not both, and taking the icon off a
+stock row to put it on ours is not a trade worth making.
+
+That is the whole search space: the map is closed. An iconless row is what a
+tenth Menu entry looks like on this launcher.
+
+### The Tools folder is not a way out of that
+
+`ToolsNewActivity` reads `array/tools_list` with the same
+`startsWith("com") || startsWith("org")` rule, so adding
+`com.github.jackharvest.flipflex` to it does put FlipFlex in the folder,
+alongside the seven of its eleven entries that are installed here. But its
+`mToolsIconMap` has **no** string-resource keys at all — every one of the twelve
+is a literal — so the icon problem is strictly worse there, and the binder is
+worse too:
+
+```java
+if (appInfo.iconBitmap != null) viewHolder.icon.applyFromApplicationInfo(appInfo);
+```
+
+`applyFromApplicationInfo` is also what calls `setText`. In the **grid** layout a
+null bitmap therefore skips the label as well, and the entry renders as a
+completely empty cell. This handset is `all_app_layout_type = 1`, the list
+layout, which does `setText` unconditionally and only skips the image — so it
+would show as a named, numbered, iconless row, exactly like item 10 does now
+but one level deeper in the menu.
+
+So the Tools folder buys nothing and costs a keypress.
 
 ## Tools used, for next time
 
