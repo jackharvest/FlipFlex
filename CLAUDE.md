@@ -313,6 +313,38 @@ is needed for the player, or the landscape content arrives letterboxed inside a
 temporarily replaced in `shared_prefs/flipflex.xml`, because the splash and every
 home-screen header display them.
 
+### Driving the UI for a recording, which is not the same as driving it for a test
+
+A long screen capture has to look like the app responding to a person, and
+`adb shell input keyevent` cannot do that: **one injected key takes about 1.3
+seconds on this handset**, because each call starts an `app_process` JVM. Six
+presses of a D-pad then read as a hung app.
+
+`sendevent` on `/dev/input/event2` (the matrix keypad — see `keymap.md` for the
+scancodes) costs single-digit milliseconds and arrives with a real scancode, so
+the timing in the finished video is the app's own. It needs **root**, and the
+reason is not the group: `adb shell` is already in `input`, and the open still
+fails, because SELinux does not let the `shell` domain touch an input device.
+
+The trap is that `su` is what ruins the recording. Magisk toasts *Shell was
+granted Superuser rights* over whatever is on screen, and it does it again on
+later grants, not just the first — so a per-chapter `su -c` puts a grey box in
+the middle of some arbitrary chapter. **Hold one long-lived root shell for the
+whole session** and feed it scripts; the toast then happens once, before any
+recording starts. (`su_notification` in Magisk's sqlite would silence it too,
+but one shell is less to put back afterwards.)
+
+Two more things worth not rediscovering. Key repeats faster than about **0.3 s
+apart get dropped**, and a dropped press desynchronises every index that
+follows it, so a chapter ends up somewhere it was never meant to go — verify
+the starting state with a screenshot before each take rather than assuming it.
+And recording the player at the native 240x320 does letterbox the landscape
+window as the note above says, but the **picture-area difference survives it**:
+landscape lands about 240x180 against portrait's 240x135, which is exactly the
+comparison a rotation demo is trying to show. Record at 240x320 when the
+finished video is portrait; use `--size 320x240` only when the player is the
+whole subject.
+
 ## The unlock, in the two paragraphs an app change can trip over
 
 The whole of it — bootloader, recovery, dumping boot, patching it with Magisk,
