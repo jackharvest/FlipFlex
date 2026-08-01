@@ -487,4 +487,8 @@ their phone.
 
 ## License
 
-[MIT](LICENSE).
+[MIT](LICENSE). Free, and staying that way.
+
+If it got a phone like this doing something useful and you feel like it,
+there's a [coffee](https://buymeacoffee.com/jackharvest) — it is also the last
+row of Settings → Help, and the app mentions it nowhere else.

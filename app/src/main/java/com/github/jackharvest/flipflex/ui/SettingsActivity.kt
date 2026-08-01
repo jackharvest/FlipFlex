@@ -2,6 +2,7 @@ package com.github.jackharvest.flipflex.ui
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import android.widget.FrameLayout
@@ -46,6 +47,9 @@ class SettingsActivity : FlipActivity() {
         private const val TAB_HELP = 3
 
         private const val EXTRA_MODE = "mode"
+
+        /** Tip jar. Bottom of the last tab, and referenced nowhere else. */
+        private const val COFFEE_URL = "https://buymeacoffee.com/jackharvest"
 
         fun intent(ctx: Context, mode: String = MODE_ROOT): Intent =
             Intent(ctx, SettingsActivity::class.java).putExtra(EXTRA_MODE, mode)
@@ -328,6 +332,37 @@ class SettingsActivity : FlipActivity() {
                 isBlurb = true,
             )
         )
+        add(
+            RowList.Row(
+                title = getString(R.string.coffee_title),
+                subtitle = COFFEE_URL.removePrefix("https://"),
+                payload = Entry { openCoffee() },
+            )
+        )
+    }
+
+    /**
+     * Open the tip page in the phone's browser, and say the address either way.
+     *
+     * Last row of the last tab, and nowhere else: the app never asks for this
+     * unprompted, so someone reading it went looking for it.
+     *
+     * The subtitle carries the bare address on purpose. This is a 240x320 screen
+     * with a T9 keypad in front of a payment form, which is not somewhere anyone
+     * should have to finish the job -- reading the address off and typing it on
+     * something with a keyboard is the likelier path, and it is the only one that
+     * works if the browser has been disabled. Same reason the failure here is a
+     * transient message rather than an error: there is nothing to recover from,
+     * the address is on screen already.
+     */
+    private fun openCoffee() {
+        val opened = runCatching {
+            startActivity(
+                Intent(Intent.ACTION_VIEW, Uri.parse(COFFEE_URL))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        }.isSuccess
+        if (!opened) showTransientMessage(getString(R.string.coffee_no_browser, COFFEE_URL))
     }
 
     private fun versionName(): String = runCatching {

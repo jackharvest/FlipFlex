@@ -87,6 +87,13 @@
 
     <string name="msg_offline">Cannot reach Plex.\nPress OK to retry.</string>
 
+    <!-- The tip jar, last row of Settings 4. Nothing else in the app mentions
+         it. The address is in the row subtitle as well as here, because typing
+         it on something with a keyboard beats filling in a payment form on a
+         240x320 screen with T9. -->
+    <string name="coffee_title">Buy me a coffee</string>
+    <string name="coffee_no_browser">No browser on this phone.\n\n%1$s</string>
+
     <!-- The controls tour. The footer names the key that advances it, because
          this is the one screen where the reader cannot be assumed to know. -->
     <string name="tour_title">Controls</string>
