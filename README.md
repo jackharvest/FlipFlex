@@ -77,7 +77,7 @@ Unlock the phone first, so that installs are allowed at all. Then take
 [**Releases**](https://github.com/jackharvest/FlipFlex/releases/latest) and:
 
 ```sh
-adb install flipflex-1.0.2.apk
+adb install flipflex-1.0.4.apk
 ```
 
 Open it. It teaches you the keypad, then asks you to sign in.
