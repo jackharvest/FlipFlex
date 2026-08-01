@@ -112,7 +112,10 @@
     <string name="update_found_go">Download and install</string>
     <string name="update_downloading">Downloading %1$d%%</string>
     <string name="update_source_title">Allow FlipFlex to install it?</string>
-    <string name="update_source_note">Android needs this once, on a screen of its own: turn on “Allow from this source”, press Back, and choose Check for updates again.</string>
+    <!-- "Help again" rather than "again", because Back from that screen does
+         not come back here: Settings is usually destroyed behind it on a phone
+         with this little memory, and returns on its first tab. -->
+    <string name="update_source_note">Android needs this once, on a screen of its own: turn on “Allow from this source”, press Back, then open Help and choose Check for updates again.</string>
     <string name="update_source_go">Open that screen</string>
     <string name="update_source_missing">This phone has no screen for allowing app installs, so updates have to be installed over USB.</string>
 
