@@ -46,7 +46,13 @@ cp app/build/outputs/apk/release/app-release.apk "$OUT"
 # place -- which is worth noticing here rather than in an issue report.
 SIGNER=$(find "$(sed -n 's/^sdk.dir=//p' local.properties)/build-tools" -name apksigner 2>/dev/null | sort | tail -1)
 if [ -n "$SIGNER" ]; then
-	"$SIGNER" verify --print-certs "$OUT" | sed -n 's/^Signer #1 certificate SHA-256 digest: /sha256 /p'
+	# "signing key" not "sha256": this is the certificate's digest, not the
+	# APK's, and it is SUPPOSED to be identical every release. Printed bare it
+	# reads like an artifact hash, and an unchanged one then looks like a build
+	# that did not rebuild -- which cost a few minutes proving otherwise.
+	"$SIGNER" verify --print-certs "$OUT" |
+		sed -n 's/^Signer #1 certificate SHA-256 digest: /signing key /p'
+	shasum -a 256 "$OUT" | sed 's/^\([0-9a-f]*\) .*/apk sha256 \1/'
 else
 	echo "apksigner not found; skipping signature check" >&2
 fi
