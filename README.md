@@ -28,7 +28,8 @@ It works. Not as a demo — it is what one of these phones does on a train now.
 
 <p align="center">
   <img src="docs/media/player.gif" width="360"><br>
-  <sub>Seeking forward through an episode. Yes, that is the actual screen.</sub>
+  <sub>Six presses of →, fifteen seconds each, on a transcode coming off the
+  server live. Yes, that is the actual screen.</sub>
 </p>
 
 ---
