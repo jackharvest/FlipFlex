@@ -5,10 +5,10 @@
     <color name="ff_ground">#FF0F0F0F</color>
     <color name="ff_surface">#FF1A1A1A</color>
     <color name="ff_amber">#FFF5A623</color>
-    <!-- The selection bar when the cursor is somewhere else: the letter rail or
-         the view tabs. Amber is the cursor, and two amber bars on one screen is
-         two cursors. This keeps the row findable without claiming to be live. -->
-    <color name="ff_amber_parked">#FF4A3617</color>
+    <!-- There was a dimmed amber here for the selection bar of a list whose
+         cursor had moved to the tabs or the header. It is gone on purpose: a
+         second filled bar reads as a second cursor however dim it is. A parked
+         list now draws no bar at all. See RowList.parked. -->
     <color name="ff_text">#FFFFFFFF</color>
     <color name="ff_text_dim">#FF8A8A8A</color>
     <color name="ff_rule">#FF2C2C2C</color>
@@ -16,8 +16,8 @@
     <!-- Badges and row accents.
          Amber is deliberately absent from both sets. It is the cursor, and a
          badge or a stripe wearing the cursor's colour is a second thing on
-         screen claiming to be selected — which is the exact confusion the
-         parked colour above exists to avoid.
+         screen claiming to be selected — the same confusion that removing the
+         parked bar above was about.
 
          The hues are assigned by meaning, not by position, so the same fact is
          always the same colour: blue is what the file already is, green is what

@@ -404,8 +404,25 @@ class BrowseActivity : FlipActivity() {
     private fun focusTabs(on: Boolean): Boolean {
         if (activeTab() == null) return false
         tabBar.setFocused(on)
-        list.parked = on
+        syncCursorOwner()
         return true
+    }
+
+    /**
+     * Park the list whenever anything else on this screen owns the cursor.
+     *
+     * Asked as a question about the current state rather than told by each
+     * handler, because this screen has three other controls -- the tab strip,
+     * the letter rail and the header -- and handing the cursor between them
+     * takes two calls in some order. Up off the tab strip was
+     * `if (focusHeader(true)) focusTabs(false)`, which lit the header and then
+     * un-parked the list on its way out of the strip, leaving a full amber bar
+     * on the episode below the lit header: the cursor was visibly in two places
+     * and OK acted on neither of the obvious ones. Deriving it means no order of
+     * calls can get it wrong.
+     */
+    private fun syncCursorOwner() {
+        list.parked = isHeaderFocused || tabBar.focused || railFocused
     }
 
     /**
@@ -504,7 +521,7 @@ class BrowseActivity : FlipActivity() {
     private fun focusRail(on: Boolean) {
         if (letters.isEmpty()) return
         railFocused = on
-        list.parked = on
+        syncCursorOwner()
         if (on) {
             railIndex = letters.indexOf(letter).takeIf { it >= 0 } ?: 0
             setSoftKeys(left = getString(R.string.soft_home), right = null)
@@ -800,7 +817,7 @@ class BrowseActivity : FlipActivity() {
     // ---- keys --------------------------------------------------------------
 
     override fun onHeaderFocusChanged(on: Boolean) {
-        list.parked = on
+        syncCursorOwner()
     }
 
     override fun onAction(action: Action, keyCode: Int): Boolean {

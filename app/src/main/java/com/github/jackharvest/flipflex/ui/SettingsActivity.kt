@@ -375,7 +375,7 @@ class SettingsActivity : FlipActivity() {
         if (index !in 0 until strip.count) return false
         tab = index
         strip.setFocused(false)
-        list.parked = false
+        syncCursorOwner()
         // Not keepSelection: a different tab is a different list, and holding
         // the index would land the cursor on whatever happens to be third here.
         loadRoot()
@@ -740,7 +740,19 @@ class SettingsActivity : FlipActivity() {
     // ---- keys --------------------------------------------------------------
 
     override fun onHeaderFocusChanged(on: Boolean) {
-        list.parked = on
+        syncCursorOwner()
+    }
+
+    /**
+     * Park the list whenever the tab strip or the header owns the cursor.
+     *
+     * Derived rather than set by each handler, for the reason written out in
+     * BrowseActivity.syncCursorOwner: walking up off the strip onto the header
+     * takes two calls, and whichever of them runs second decides what the list
+     * looks like.
+     */
+    private fun syncCursorOwner() {
+        list.parked = isHeaderFocused || tabs?.focused == true
     }
 
     override fun onAction(action: Action, keyCode: Int): Boolean {
@@ -757,7 +769,7 @@ class SettingsActivity : FlipActivity() {
                 Action.RIGHT -> { strip.move(+1); true }
                 Action.SELECT -> showTab(strip.cursor)
                 Action.DOWN, Action.BACK -> {
-                    strip.setFocused(false); list.parked = false; true
+                    strip.setFocused(false); syncCursorOwner(); true
                 }
                 // One more press of up leaves the strip for the header, which is
                 // the only thing above it. The chain is list, tabs, title.
@@ -791,7 +803,7 @@ class SettingsActivity : FlipActivity() {
     private fun focusTabs(): Boolean {
         val strip = tabs ?: return false
         strip.setFocused(true)
-        list.parked = true
+        syncCursorOwner()
         return true
     }
 

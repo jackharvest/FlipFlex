@@ -98,13 +98,20 @@ class RowList(context: Context) : RecyclerView(context) {
         private set
 
     /**
-     * True while some other control on the screen owns the cursor -- the letter
-     * rail, or the library view tabs.
+     * True while some other control on the screen owns the cursor -- the header,
+     * the letter rail, or the view tabs.
      *
-     * The selection bar is how this app shows where you are, so leaving it lit
-     * while the tab strip is also lit puts two cursors on a 240dp screen and
-     * makes it genuinely unclear which one OK is about to act on. Parked keeps
-     * the row marked, in a colour that is plainly not the live one.
+     * **A parked list draws no selection bar at all.** The list still remembers
+     * its index, and pressing down puts the bar back exactly where it was.
+     *
+     * It used to draw one in a dimmed amber, on the theory that the row stayed
+     * findable without claiming to be live. On the handset that is not how it
+     * reads: walking up off the top of a show onto the `‹ Title` header leaves a
+     * filled bar on the episode below and a filled bar on the header, and the
+     * only difference between them is a shade of amber on a 2.4" panel. Two
+     * bars is two cursors whatever colour they are, and the question the user
+     * is actually asking -- which one is OK about to act on -- is not one a
+     * shade can answer. One bar, always, and it is the cursor.
      */
     var parked: Boolean = false
         set(value) {
@@ -442,8 +449,11 @@ class RowList(context: Context) : RecyclerView(context) {
             }
 
             val ctx = itemView.context
+            // Parked draws nothing: see [parked]. So a parked row is painted
+            // exactly like any other unselected one, down to the accent stripe
+            // below -- there is no third state to keep straight.
             val live = isSelected && !parked
-            root.setBackgroundColor(if (isSelected) ctx.getColor(selectionColor()) else 0)
+            root.setBackgroundColor(if (live) ctx.getColor(R.color.ff_amber) else 0)
             title.setTextColor(ctx.getColor(if (live) R.color.ff_ground else R.color.ff_text))
             // The dim colours have to flip too. Amber-on-amber for the subtitle
             // was the first version and the selected row's second line simply
@@ -457,7 +467,7 @@ class RowList(context: Context) : RecyclerView(context) {
             trailing.setTextColor(
                 if (!live && row.accent != 0) ctx.getColor(row.accent) else dim
             )
-            if (row.accent != 0 && !isSelected) {
+            if (row.accent != 0 && !live) {
                 accent.visibility = View.VISIBLE
                 accent.setBackgroundColor(ctx.getColor(row.accent))
             }
@@ -537,10 +547,9 @@ class RowList(context: Context) : RecyclerView(context) {
             secondLine.visibility = View.GONE
             badges.visibility = View.GONE
             progress.visibility = View.GONE
-            root.setBackgroundColor(if (isSelected) ctx.getColor(selectionColor()) else 0)
-            title.setTextColor(
-                ctx.getColor(if (isSelected && !parked) R.color.ff_ground else R.color.ff_amber)
-            )
+            val live = isSelected && !parked
+            root.setBackgroundColor(if (live) ctx.getColor(R.color.ff_amber) else 0)
+            title.setTextColor(ctx.getColor(if (live) R.color.ff_ground else R.color.ff_amber))
         }
 
         /** Undo what [bindBlurb] did, on a holder that may have been one. */
@@ -551,9 +560,6 @@ class RowList(context: Context) : RecyclerView(context) {
             // recycled holder would carry that hiding into a real row.
             title.visibility = View.VISIBLE
         }
-
-        private fun selectionColor(): Int =
-            if (parked) R.color.ff_amber_parked else R.color.ff_amber
 
         private fun dp(v: Int): Int =
             (v * itemView.resources.displayMetrics.density).toInt()

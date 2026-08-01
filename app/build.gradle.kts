@@ -42,15 +42,15 @@ android {
         // the phone refuses to install an APK whose code is lower than the one
         // already there, and silently keeps the old one if they are equal.
         //
-        // 3 with the name still at 1.0.0 is the one deliberate exception. The
-        // published 1.0.0 asset was code 2, and it was replaced in place rather
-        // than given a new number -- the changes in it are the tip-jar row and a
-        // launcher force-stop, which is not a version anyone needs to be able to
-        // name. The code still had to move, or a phone on the old build would
-        // silently keep it. Do not read this as licence to do it again: the next
-        // change that is worth shipping gets 4 and a new versionName.
-        versionCode = 3
-        versionName = "1.0.0"
+        // 3 with the name still at 1.0.0 was the one deliberate exception: the
+        // published 1.0.0 asset was code 2 and was replaced in place rather than
+        // given a new number, for a tip-jar row and a launcher force-stop that
+        // nobody needs to be able to name. The code still had to move, or a
+        // phone on the old build would silently keep it. That is spent now --
+        // 1.0.1 is code 4, and every later change that is worth shipping takes
+        // both numbers with it.
+        versionCode = 4
+        versionName = "1.0.1"
 
         // The MT6739 is 32-bit only: ro.product.cpu.abi=armeabi-v7a with no
         // abilist64. Nothing we ship is native today, but pinning the filter

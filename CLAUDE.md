@@ -175,6 +175,22 @@ visibly in Settings, which has a caption every four rows. The rule is now that
 the selected row is always on screen and the caption is a preference that only
 applies going *up*. Do not reintroduce an anchor that is not the cursor.
 
+**There is exactly one selection bar on screen, and it is the cursor.** A list
+whose cursor has moved to the tab strip, the letter rail or the `‹ Title` header
+draws no bar at all — `RowList.parked`. It used to draw one in a dimmed amber on
+the theory that the row stayed findable, and on the panel that reads as a second
+cursor rather than as a memory: two filled bars, one of them lit, and no way to
+tell from a shade which one OK is about to act on. Reported from the handset as
+the highlight being in two places at once.
+
+Browsing had a worse version of the same thing, and it is the shape to watch
+for: handing the cursor between two controls takes two calls, and
+`if (focusHeader(true)) focusTabs(false)` lit the header and then *un-parked* the
+list on the way out of the strip, leaving a full-brightness bar on the episode
+below. Both screens with more than one other control now derive it —
+`syncCursorOwner()`, asked as a question about current state — so no order of
+calls can get it wrong. Fixed in 1.0.1.
+
 **A full-screen transient message is a screen, and Back must only dismiss it.**
 `showTransientMessage` covers the content frame and the next key takes it down
 while still doing its own job — right for the arrow keys, wrong for Back, which
