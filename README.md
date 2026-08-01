@@ -77,14 +77,20 @@ Unlock the phone first, so that installs are allowed at all. Then take
 [**Releases**](https://github.com/jackharvest/FlipFlex/releases/latest) and:
 
 ```sh
-adb install flipflex-1.0.0.apk
+adb install flipflex-1.0.2.apk
 ```
 
 Open it. It teaches you the keypad, then asks you to sign in.
 
-Updating later is just `adb install -r` over the top — the release APKs are all
-signed with the same key, so your login, your settings and your downloads stay
-where they are.
+**After that the phone updates itself.** *Settings · Help · Check for updates*
+reads this repository's release page, and if there is a newer one it downloads
+it and installs it on the handset — no cable, no computer. Android asks once,
+on a screen of its own, for permission to let FlipFlex install things; the app
+sends you there and it is two key presses. Your login, your settings and your
+downloads survive, because every release is signed with the same key.
+
+`adb install -r` over the top still works and is the way back to any older
+release.
 
 <details>
 <summary>Optionally: put it in the phone's own Menu</summary>

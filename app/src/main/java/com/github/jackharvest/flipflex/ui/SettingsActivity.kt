@@ -18,6 +18,7 @@ import com.github.jackharvest.flipflex.plex.PlexProfiles
 import com.github.jackharvest.flipflex.plex.PlexServers
 import com.github.jackharvest.flipflex.plex.Quality
 import com.github.jackharvest.flipflex.store.NetPolicy
+import com.github.jackharvest.flipflex.update.Updates
 import kotlinx.coroutines.launch
 
 /**
@@ -334,11 +335,118 @@ class SettingsActivity : FlipActivity() {
         )
         add(
             RowList.Row(
+                title = getString(R.string.update_title),
+                subtitle = getString(R.string.update_subtitle),
+                payload = Entry { checkForUpdates() },
+            )
+        )
+        add(
+            RowList.Row(
                 title = getString(R.string.coffee_title),
                 subtitle = COFFEE_URL.removePrefix("https://"),
                 payload = Entry { openCoffee() },
             )
         )
+    }
+
+    /**
+     * Ask GitHub whether there is a newer FlipFlex, and install it if so.
+     *
+     * ## Why this is here and not on a screen of its own
+     *
+     * It is three sentences of state -- checking, there is one, there is not --
+     * and the row it is on already says what it does. A whole activity would be
+     * one more thing to navigate back out of for the overwhelmingly common
+     * answer, which is "no".
+     *
+     * ## The order of the questions, which is not the obvious one
+     *
+     * The permission is asked about *before* the download rather than after.
+     * Android will not let an app install anything until the user has allowed it
+     * as a source, once, on a system screen -- and finding that out after
+     * spending twelve megabytes of somebody's data on a phone plan is the wrong
+     * order to find it out in. See [Updates.canInstall].
+     *
+     * Nothing here is guarded by [store] preferences: Wi-Fi only is about
+     * episodes, which are hundreds of megabytes and arrive dozens of times. This
+     * is twelve, a handful of times a year, and always because the user has just
+     * pressed a row asking for it. It still says the size before spending it.
+     */
+    private fun checkForUpdates() {
+        val running = versionName()
+        setBusy(true, getString(R.string.update_checking))
+        lifecycleScope.launch {
+            val result = Updates.check(running)
+            setBusy(false)
+            when (result) {
+                is Updates.Check.Failed ->
+                    showTransientMessage(getString(R.string.update_failed))
+                is Updates.Check.Current ->
+                    showTransientMessage(getString(R.string.update_current, result.version))
+                is Updates.Check.Newer -> offerUpdate(result.release, running)
+            }
+        }
+    }
+
+    private fun offerUpdate(release: Updates.Release, running: String) {
+        // Rounded up, and in whole megabytes: this is a number somebody is
+        // deciding against a data allowance, not a file listing.
+        val megabytes = ((release.size + 1_048_575) / 1_048_576).toInt()
+        confirm(
+            heading = getString(R.string.update_found_title, release.version),
+            confirmLabel = getString(R.string.update_found_go),
+            note = getString(R.string.update_found_note, running, megabytes),
+        ) {
+            if (Updates.canInstall(this)) startUpdate(release) else askToAllowInstalls()
+        }
+    }
+
+    /**
+     * The one-time trip to the system screen that allows this app as a source.
+     *
+     * Explained first, in the panel the user is already looking at, because the
+     * screen it lands on is a stock Android one that says nothing about
+     * FlipFlex having just asked for it -- and it is reached from an app that
+     * has never sent the user anywhere else. The instruction has to include
+     * "press Back and choose it again", because the system screen does not
+     * return anywhere by itself.
+     */
+    private fun askToAllowInstalls() {
+        confirm(
+            heading = getString(R.string.update_source_title),
+            confirmLabel = getString(R.string.update_source_go),
+            note = getString(R.string.update_source_note),
+        ) {
+            val opened = runCatching { startActivity(Updates.sourceSettings(this)) }.isSuccess
+            if (!opened) showTransientMessage(getString(R.string.update_source_missing))
+        }
+    }
+
+    /**
+     * Fetch it, then hand it to the system installer.
+     *
+     * The progress is in the header rather than a bar, because there is nowhere
+     * else on this screen for it to go and the list underneath is still worth
+     * reading. It is coarse on purpose -- a percentage that updates on every
+     * 64 kB block would repaint the header a hundred and eighty times.
+     */
+    private fun startUpdate(release: Updates.Release) {
+        setBusy(true, getString(R.string.update_downloading, 0))
+        var shown = 0
+        lifecycleScope.launch {
+            val error = Updates.download(this@SettingsActivity, release) { fraction ->
+                val percent = (fraction * 100).toInt()
+                if (percent >= shown + 5) {
+                    shown = percent
+                    runOnUiThread { setBusy(true, getString(R.string.update_downloading, percent)) }
+                }
+            }
+            setBusy(false)
+            // No success branch: the platform's own confirm screen is on top by
+            // then, and if the user says yes this process does not survive to
+            // draw anything anyway.
+            if (error != null) showTransientMessage(error)
+        }
     }
 
     /**

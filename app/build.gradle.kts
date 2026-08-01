@@ -48,9 +48,11 @@ android {
         // nobody needs to be able to name. The code still had to move, or a
         // phone on the old build would silently keep it. That is spent now --
         // 1.0.1 is code 4, and every later change that is worth shipping takes
-        // both numbers with it.
-        versionCode = 4
-        versionName = "1.0.1"
+        // both numbers with it -- and from 1.0.2 the phone reads the versionName
+        // back off the GitHub release page and compares it, so a name that does
+        // not move is an update nobody is offered. See update/Updates.kt.
+        versionCode = 5
+        versionName = "1.0.2"
 
         // The MT6739 is 32-bit only: ro.product.cpu.abi=armeabi-v7a with no
         // abilist64. Nothing we ship is native today, but pinning the filter

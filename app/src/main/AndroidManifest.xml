@@ -12,6 +12,18 @@
          that survives that. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
+    <!-- Settings → Help → Check for updates, which fetches the release APK from
+         GitHub and hands it to the system installer. This has to be *declared*,
+         not merely allowed: com.android.packageinstaller refuses any caller
+         whose manifest lacks it, and says so only in the log —
+           InstallStart: Requesting uid NNNN needs to declare permission
+           android.permission.REQUEST_INSTALL_PACKAGES
+         while the user sees nothing happen at all. Declaring it is also what
+         un-greys the toggle on Settings → Install unknown apps; without it that
+         screen renders for this app and cannot be switched on. See
+         update/Updates.kt. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <!-- The handset has no touchscreen worth speaking of and is driven entirely
          by the keypad. Declaring this stops the build system assuming a
          touch-first device and documents the input model for anyone reading. -->
@@ -93,6 +105,13 @@
             android:name=".ui.DownloadsActivity"
             android:screenOrientation="portrait"
             android:configChanges="keyboardHidden|orientation|screenSize" />
+
+        <!-- Where an update's install session reports back to. Not exported:
+             the only thing that ever sends to it is the platform, via the
+             PendingIntent the session was committed with. -->
+        <receiver
+            android:name=".update.InstallReceiver"
+            android:exported="false" />
 
         <!-- dataSync is only mandatory from API 34, and this app is API 30
              only. Declared anyway because it is the honest description of what

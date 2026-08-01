@@ -94,6 +94,28 @@
     <string name="coffee_title">Buy me a coffee</string>
     <string name="coffee_no_browser">No browser on this phone.\n\n%1$s</string>
 
+    <!-- Settings 4 → Check for updates. The prose says GitHub out loud because
+         that is where the APK comes from and nothing else on this phone will
+         ever offer it one; and it says the size, because the answer to "shall
+         I?" on a metered link depends on it. -->
+    <string name="update_title">Check for updates</string>
+    <string name="update_subtitle">From the GitHub release page</string>
+    <string name="update_checking">Checking…</string>
+    <!-- Phrased as a fact about this phone rather than about the release page,
+         because a development build is ahead of the newest release and "1.0.3
+         is the newest release" would then be a lie about a version that is not
+         published yet. -->
+    <string name="update_current">You are on FlipFlex %1$s.\nNothing newer has been released.</string>
+    <string name="update_failed">Could not reach GitHub.\nPress OK to try again.</string>
+    <string name="update_found_title">FlipFlex %1$s is available</string>
+    <string name="update_found_note">You are on %1$s. The download is %2$d MB, and the phone installs it itself — your Plex login and downloads are kept.</string>
+    <string name="update_found_go">Download and install</string>
+    <string name="update_downloading">Downloading %1$d%%</string>
+    <string name="update_source_title">Allow FlipFlex to install it?</string>
+    <string name="update_source_note">Android needs this once, on a screen of its own: turn on “Allow from this source”, press Back, and choose Check for updates again.</string>
+    <string name="update_source_go">Open that screen</string>
+    <string name="update_source_missing">This phone has no screen for allowing app installs, so updates have to be installed over USB.</string>
+
     <!-- The controls tour. The footer names the key that advances it, because
          this is the one screen where the reader cannot be assumed to know. -->
     <string name="tour_title">Controls</string>

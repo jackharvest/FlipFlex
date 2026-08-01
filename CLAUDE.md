@@ -206,6 +206,27 @@ is a folder of downloads for a train. It returns a three-way `Validation` now,
 and only `Rejected` discards anything. Recovering from the old behaviour needs a
 second device with a browser, so it is not a small bug.
 
+**The package installer refuses a caller whose *manifest* does not declare
+`REQUEST_INSTALL_PACKAGES`, and says so only in the log.** Granting the appop is
+not enough — proven by granting it to `com.android.shell` and watching the
+install still fail. On screen nothing happens at all; in logcat:
+
+```
+E InstallStart: Requesting uid 2000 needs to declare permission android.permission.REQUEST_INSTALL_PACKAGES
+```
+
+The same declaration is what un-greys the toggle on **Settings → Install unknown
+apps**: without it that screen renders for the app and comes back
+`enabled="false"` in a `uiautomator dump`, which reads as a phone that will not
+allow sideloading rather than as a missing line in the manifest. Two other
+things about that path, both measured on the handset: the installer accepts
+**`content:` URIs only** — a `file:` intent does not resolve at all on API 30,
+with the installer sitting there enabled — which is why `update/Updates.kt`
+streams into a `PackageInstaller` session instead; and the whole flow *is*
+operable on this screen, D-pad only, including TCL's numbered "1. Allow from
+this source" toggle and the stock `CANCEL | INSTALL` dialog, which opens on
+CANCEL and needs one press of right.
+
 **Kotlin block comments nest.** A literal slash-star inside a KDoc — as in a
 path like `transcode/universal/<star>` — opens a nested comment that never
 closes. The error is `Missing '}'` on an unrelated line plus `Unclosed comment`
@@ -289,6 +310,16 @@ a GitHub release asset. `tools/release.sh` reads the version out of
 `app/build.gradle.kts` so the tag, the file name and the string on Settings →
 Help cannot disagree; run it with no argument to build and verify, `publish` to
 tag and push.
+
+**From 1.0.2 the release page is not just where people download it from — it is
+what handsets in the field poll.** `update/Updates.kt` reads
+`/releases/latest`, strips the `v` off `tag_name`, compares it with
+`versionName` and takes the **first asset whose name ends `.apk`**. So: one APK
+per release, tags stay `vX.Y.Z` with three numbers, and a release that is
+published before its asset finishes uploading is a release the phones cannot
+install — which they treat as a failed check rather than offering something
+they cannot fetch. `release.sh` uploads the asset in the same command as the
+tag, so the window is short, but do not create a release by hand without one.
 
 **The keystore lives in `~/.flipflex/`, not in the repo — not even gitignored
 inside it.** A file that is not in the tree cannot be `git add -f`ed by mistake,
