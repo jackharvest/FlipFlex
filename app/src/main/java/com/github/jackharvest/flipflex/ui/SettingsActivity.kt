@@ -388,14 +388,30 @@ class SettingsActivity : FlipActivity() {
         }
     }
 
+    /**
+     * The question, with what is actually in the update above it.
+     *
+     * The release notes come first and the housekeeping second, because the
+     * decision is about the former: "what do I get" is the question somebody is
+     * really answering, and the size and the reassurance about not losing
+     * anything are the caveats to it. A release whose notes are empty -- one
+     * published by hand, or written as a wall of prose this cannot bullet --
+     * falls back to the longer sentence, which is the 1.0.2 behaviour and still
+     * says everything the user must know.
+     */
     private fun offerUpdate(release: Updates.Release, running: String) {
         // Rounded up, and in whole megabytes: this is a number somebody is
         // deciding against a data allowance, not a file listing.
         val megabytes = ((release.size + 1_048_575) / 1_048_576).toInt()
+        val note = if (release.notes.isEmpty()) {
+            getString(R.string.update_found_note, running, megabytes)
+        } else {
+            release.notes + "\n\n" + getString(R.string.update_found_facts, running, megabytes)
+        }
         confirm(
             heading = getString(R.string.update_found_title, release.version),
             confirmLabel = getString(R.string.update_found_go),
-            note = getString(R.string.update_found_note, running, megabytes),
+            note = note,
         ) {
             if (Updates.canInstall(this)) startUpdate(release) else askToAllowInstalls()
         }

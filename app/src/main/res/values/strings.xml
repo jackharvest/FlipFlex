@@ -109,6 +109,9 @@
     <string name="update_failed">Could not reach GitHub.\nPress OK to try again.</string>
     <string name="update_found_title">FlipFlex %1$s is available</string>
     <string name="update_found_note">You are on %1$s. The download is %2$d MB, and the phone installs it itself — your Plex login and downloads are kept.</string>
+    <!-- The same facts under a list of what is new, where the bullets have
+         already earned the space and this only has to not repeat them. -->
+    <string name="update_found_facts">You are on %1$s · %2$d MB · your login and downloads are kept.</string>
     <string name="update_found_go">Download and install</string>
     <string name="update_downloading">Downloading %1$d%%</string>
     <string name="update_source_title">Allow FlipFlex to install it?</string>

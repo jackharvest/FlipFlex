@@ -71,6 +71,8 @@ object Updates {
         val version: String,
         val url: String,
         val size: Long,
+        /** What changed, as bullets, ready to paint. Empty if the notes say nothing. */
+        val notes: String,
     )
 
     sealed interface Check {
@@ -109,6 +111,7 @@ object Updates {
         // Tags are written `v1.0.1` and versionName is `1.0.1`; the whole
         // comparison happens on the bare numbers.
         val version = json.str("tag_name").removePrefix("v")
+        val notes = bullets(json.str("body"))
         val assets = json.optJSONArray("assets") ?: return null
         for (i in 0 until assets.length()) {
             val asset = assets.getJSONObject(i)
@@ -117,9 +120,59 @@ object Updates {
             val url = asset.str("browser_download_url")
             val size = asset.optLong("size")
             if (version.isEmpty() || url.isEmpty() || size <= 0) return null
-            return Release(version, url, size)
+            return Release(version, url, size, notes)
         }
         return null
+    }
+
+    /**
+     * Turn a release page's markdown into something a 240x320 panel can show.
+     *
+     * The notes are written for the release list on GitHub, and the phone shows
+     * the same text before asking whether to download -- so this has to survive
+     * whatever markdown was used, without pulling in a renderer.
+     *
+     * What it does: drops headings, rules and the `**Full Changelog**` line
+     * GitHub appends; turns `- ` and `* ` into a real bullet, because a leading
+     * hyphen at 10sp reads as a dash rather than as a list; strips `**` and
+     * backticks, which are noise once nothing can be bold.
+     *
+     * It also **reflows**, and that is not cosmetic. The notes are written in a
+     * file wrapped at eighty columns, so a single bullet arrives as three lines
+     * -- which would spend three of [MAX_LINES] on one point, and drop the last
+     * two bullets of a four-bullet release. A line that does not start a new
+     * bullet belongs to the one above it.
+     *
+     * What it does not do is scroll. The panel is as tall as its contents and
+     * sits at the bottom of the screen, so notes long enough to push the Cancel
+     * row off the top would take the way out of the panel with them.
+     * [MAX_LINES] and [MAX_CHARS] are what stop that, and the ellipsis is
+     * honest: the whole text is on the release page, and this is a summary by
+     * design.
+     */
+    internal fun bullets(body: String): String {
+        val points = mutableListOf<String>()
+        for (raw in body.lineSequence()) {
+            val line = raw.trim()
+            if (line.isEmpty()) continue
+            if (line.startsWith("#") || line.startsWith("---")) continue
+            if (line.startsWith("**Full Changelog**")) continue
+            val marked = line.startsWith("- ") || line.startsWith("* ")
+            val text = line.removePrefix("- ").removePrefix("* ")
+                .replace("**", "")
+                .replace("`", "")
+            when {
+                marked -> points += "• $text"
+                // A continuation of the point above, from a file wrapped at
+                // eighty columns. An unmarked line with nothing above it is a
+                // paragraph of its own -- the 1.0.0 notes open with one.
+                points.isNotEmpty() -> points[points.lastIndex] += " $text"
+                else -> points += text
+            }
+            if (points.size > MAX_LINES) break
+        }
+        val joined = points.take(MAX_LINES).joinToString("\n")
+        return if (joined.length <= MAX_CHARS) joined else joined.take(MAX_CHARS).trimEnd() + "…"
     }
 
     /**
@@ -295,4 +348,18 @@ object Updates {
 
     /** The name of the one file in the session. Never seen by anyone. */
     private const val NAME = "flipflex.apk"
+
+    /**
+     * How much of the release notes the confirm panel can carry.
+     *
+     * Six lines and 280 characters, measured against the panel rather than
+     * guessed: the title, the notes, the facts line and two option rows have to
+     * fit in 320dp with the status bar and the softkey bar already spent, and a
+     * bullet that wraps counts twice. Notes written to the house style -- a few
+     * bullets somebody would actually notice, everything else swept into "and
+     * other bug fixes" -- come in well under this. It is a backstop, not a
+     * budget to fill.
+     */
+    private const val MAX_LINES = 6
+    private const val MAX_CHARS = 280
 }

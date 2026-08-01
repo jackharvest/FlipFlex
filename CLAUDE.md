@@ -311,6 +311,17 @@ a GitHub release asset. `tools/release.sh` reads the version out of
 Help cannot disagree; run it with no argument to build and verify, `publish` to
 tag and push.
 
+**Every release needs notes in `docs/release-notes/<version>.md`, and
+`release.sh publish` refuses without them.** A few bullets naming what somebody
+would actually notice, with the dull ones swept into a single "and other bug
+fixes" line — spelling, refactors and things nobody can see do not each get a
+bullet. This is not housekeeping: from 1.0.4 the handset shows those bullets in
+the "FlipFlex X.Y.Z is available" panel, so they are what a user reads while
+deciding whether to press Download and install, on a 240x320 screen.
+`Updates.bullets` strips the markdown and caps it at six lines and 280
+characters, and `--generate-notes` — a list of commit subjects — is the wrong
+thing in both places.
+
 **From 1.0.2 the release page is not just where people download it from — it is
 what handsets in the field poll.** `update/Updates.kt` reads
 `/releases/latest`, strips the `v` off `tag_name`, compares it with

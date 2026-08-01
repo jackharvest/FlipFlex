@@ -51,8 +51,8 @@ android {
         // both numbers with it -- and from 1.0.2 the phone reads the versionName
         // back off the GitHub release page and compares it, so a name that does
         // not move is an update nobody is offered. See update/Updates.kt.
-        versionCode = 6
-        versionName = "1.0.3"
+        versionCode = 7
+        versionName = "1.0.4"
 
         // The MT6739 is 32-bit only: ro.product.cpu.abi=armeabi-v7a with no
         // abilist64. Nothing we ship is native today, but pinning the filter

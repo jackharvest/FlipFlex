@@ -26,6 +26,7 @@ CODE=$(sed -n 's/.*versionCode = \([0-9]*\).*/\1/p' app/build.gradle.kts)
 }
 TAG="v$VERSION"
 OUT="build/flipflex-$VERSION.apk"
+NOTES="docs/release-notes/$VERSION.md"
 
 # Signing is not optional for a published build, and the check is here rather
 # than at the end because an unsigned APK is a twelve-megabyte way to find out.
@@ -59,6 +60,10 @@ fi
 
 echo "built $OUT  ($TAG, versionCode $CODE)"
 
+# Said here as well as enforced below, so a missing set of notes turns up while
+# there is still time to write them rather than at the moment of publishing.
+[ -f "$NOTES" ] || echo "note: no $NOTES yet -- publishing will refuse without it" >&2
+
 [ "$1" = "publish" ] || {
 	echo "not publishing. re-run with: tools/release.sh publish"
 	exit 0
@@ -71,9 +76,22 @@ echo "built $OUT  ($TAG, versionCode $CODE)"
 	exit 1
 }
 
+# The notes are not decoration and not a changelog. Since 1.0.2 the handset
+# reads them off the release page and shows them in the "FlipFlex X.Y.Z is
+# available" panel, so they are what somebody reads while deciding whether to
+# press Download and install -- on a 240x320 screen. A few bullets naming what a
+# user would actually notice, with the rest swept into one "and other bug fixes"
+# line. `--generate-notes` produced a list of commit subjects, which is the
+# wrong thing on the release page and worse on the phone.
+[ -f "$NOTES" ] || {
+	echo "no $NOTES -- write the release notes before publishing." >&2
+	echo "a few bullets a user would care about; see 'Shipping it' in CLAUDE.md" >&2
+	exit 1
+}
+
 git tag -a "$TAG" -m "FlipFlex $VERSION"
 git push origin "$TAG"
 gh release create "$TAG" "$OUT" \
 	--title "FlipFlex $VERSION" \
-	--generate-notes
+	--notes-file "$NOTES"
 echo "published $TAG"
