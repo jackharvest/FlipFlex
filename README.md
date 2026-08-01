@@ -398,15 +398,21 @@ handset with a 128 MB heap growth limit, a dependency you do not need is one you
 should not carry.
 
 <details>
-<summary>The rest of <code>tools/</code> — device work, not app work</summary>
+<summary>The rest of <code>tools/</code></summary>
 
 ```sh
-tools/recon.sh                  # read-only device survey; run after any flash
-tools/backup.sh critical        # ~2 min, enough to un-brick
-tools/backup.sh full            # ~1-2 h, a complete flash.bin
 tools/usb-plex.sh <ip>          # reach a LAN Plex server over USB, not Wi-Fi
 tools/install-menu-overlay.sh   # the Menu entry, as a Magisk module. Reboots
+tools/release.sh [publish]      # signed release APK, tag, GitHub release
 ```
+
+That is the whole of `tools/`, alongside `build.sh` above. Anything that writes
+to a partition — dumping boot, patching it, flashing it back, taking a
+`flash.bin` that can un-brick the phone — lives in
+[**tcl-flip-macos-unlock**](https://github.com/jackharvest/tcl-flip-macos-unlock)
+instead. That work happens once, before this repo is any use to you, and
+keeping it in one place means there is only ever one copy of a script that can
+brick a handset.
 
 `usb-plex.sh` exists because **the handset drops its own Wi-Fi**: a
 `CTRL-EVENT-DISCONNECTED reason=3 locally_generated=1` about eighteen seconds
@@ -454,8 +460,11 @@ will and will not manage.
 | [`docs/phase2-playback.md`](docs/phase2-playback.md) | The runbook. What is proven, how it was checked, and every trap that cost time |
 | [`docs/keymap.md`](docs/keymap.md) | The keypad as measured, what each key is bound to, and the tour that teaches it |
 | [`docs/launcher-menu.md`](docs/launcher-menu.md) | How an invisible sideloaded app gets into the phone's Menu |
-| [`docs/phase0-unlock.md`](docs/phase0-unlock.md) | The unlock, as it happened here. The public version is the other repo |
 | [`CLAUDE.md`](CLAUDE.md) | Everything above, compressed, for whoever works on this next |
+
+The unlock is written up in [**its own
+repo**](https://github.com/jackharvest/tcl-flip-macos-unlock), including a
+`docs/traps.md` of every silent failure it cost.
 
 ---
 

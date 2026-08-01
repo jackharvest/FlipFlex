@@ -1,12 +1,9 @@
-# The mtkclient clone is a third-party git repo with its own history. It is
-# reproduced by tools/setup-mtkclient.sh, and our two changes to it live in
-# vendor/mtkclient-macos-fuse.patch -- which IS tracked.
-vendor/mtkclient/
-
-# Device images. A full flash.bin is ~16 GB; even the critical set is tens of
-# MB of binary that git would store badly and that must never leave the machine
-# by accident -- some of these partitions carry IMEI and calibration data.
+# Device images, in case one is ever pulled in here by hand. They belong to the
+# unlock project, not this one, and some of those partitions carry IMEI and
+# per-unit RF calibration -- ignored so an accidental `git add` cannot leak them.
 backups/
+dumps/
+*.img
 
 # Android / Gradle
 .gradle/
@@ -36,7 +33,3 @@ keystore.properties
 Proof Of Concept Art Reference (Delete At End of Project).png
 
 .DS_Store
-
-# The Magisk patching kit, extracted from the APK by tools/setup-magisk.sh.
-# Binary, and reproducible from a pinned checksum, so it is not worth tracking.
-vendor/magisk-armeabi-v7a/

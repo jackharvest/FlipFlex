@@ -5,12 +5,10 @@ Sibling to `../OnionOS-PocketFlex`, which does the same job on a Miyoo Mini Plus
 and is where all the Plex protocol knowledge came from.
 
 Read `docs/phase2-playback.md` first — it is the live runbook and says exactly
-where we are. `docs/phase0-unlock.md` is the closed unlock phase, kept because
-its recovery table still matters. `docs/launcher-menu.md` is how the app gets
-into the phone's Menu, which took a resource overlay and a package rename. This
-file is the things that cost time to discover. `docs/keymap.md` has the keypad
-as measured, what FlipFlex binds each key to, and the first-run tour that
-teaches it.
+where we are. `docs/launcher-menu.md` is how the app gets into the phone's Menu,
+which took a resource overlay and a package rename. This file is the things that
+cost time to discover. `docs/keymap.md` has the keypad as measured, what FlipFlex
+binds each key to, and the first-run tour that teaches it.
 
 **Phase 2 is proven: sign in → find server → browse → transcode → play →
 report position → tear down, on the real handset against a real server.**
@@ -35,16 +33,25 @@ cosmetic: TCL's Launcher3 only treats an entry as a package name if it starts
 with `com` or `org`, so the `io.` name could never appear in the Menu. See
 `docs/launcher-menu.md`.
 
-The unlock work is also published, scrubbed of anything unit-specific, at
-**https://github.com/jackharvest/tcl-flip-macos-unlock** — tools plus a
-`docs/traps.md` of the silent failures. If you fix a bug in a `tools/` script
-that exists in both, fix it there too. **Never push `backups/` anywhere**:
-`proinfo` carries the IMEI and `nvram`/`nvdata`/`persist` carry per-unit RF
-calibration.
+**Everything about unlocking the phone now lives in
+`../tcl-flip-macos-unlock`**, published at
+**https://github.com/jackharvest/tcl-flip-macos-unlock** — every script that
+writes to a partition, the `flash.bin` and per-partition dumps under its
+`backups/`, the Magisk kit and the mtkclient clone under its `vendor/`, a
+`docs/traps.md` of the silent failures, and `notes/` for the narrative of the
+run this was all learned on. None of it is duplicated here any more: this repo
+is the app, that repo is the handset. **Never push that repo's `backups/`
+anywhere** — `proinfo` carries the IMEI and `nvram`/`nvdata`/`persist` carry
+per-unit RF calibration.
+
+What remains below about the unlock is only the part an app change can still
+trip over: `endurance` is why installs work at all, and Magisk root is what
+`tools/install-menu-overlay.sh` needs.
 
 ## The device, as measured (not as advertised)
 
-Everything here came off the real unit via `tools/recon.sh`, not a spec sheet.
+Everything here came off the real unit via the unlock repo's `tools/recon.sh`,
+not a spec sheet.
 
 | | |
 |---|---|
@@ -210,34 +217,19 @@ obvious next optimisation, not a necessity.
 
 ## Environment gotchas on this Mac
 
-**mtkclient needs Python 3.10+, not the 3.9 its README says.**
-`Library/Exploit/heapbait.py` uses PEP 604 `HeapParams | None` annotations,
-which are a syntax error before 3.10. We run it on `/opt/homebrew/bin/python3.14`.
+**`./gradlew` alone fails on a fresh shell** — see the App-layer traps section.
+The mtkclient and Magisk toolchain notes moved to the unlock repo's
+`docs/macos-setup.md`, which is the only place they are needed now.
 
-**mtkclient dies at import without macFUSE, and the guard for that is wrong.**
-Two places do `from mfusepy import ...` under `except ImportError`, but mfusepy
-raises `OSError('Unable to find libfuse')`. So the CLI was unusable on any Mac
-without a kernel extension installed, for a feature we never call. Both are
-patched to `except (ImportError, OSError)` — the author's own no-op fallbacks
-were already there and correctly guarded at the call site. Carried as
-`vendor/mtkclient-macos-fuse.patch`; **do not install macFUSE to work around
-this**, it wants a kext approval and a reboot for nothing.
+## Root, and driving the on-screen UI
 
-Skip `pyside6`/`shiboken6` from their `requirements.txt` — GUI only, and the
-most fragile part of the install.
-
-## Getting root, and driving the on-screen UI
-
-Root needs the Magisk app, which needs installs to work, which needs
-`endurance` — so it comes *last*, not first. After the app is installed and has
-done its own setup reboot:
-
-1. Magisk **Settings → Superuser access** is already `Apps and ADB`. Not the problem.
-2. **Superuser tab → `[Share dUID] com.android.shell` → toggle ON.** This is the
-   one that matters. The first `su` request pops a dialog with a **10 second**
-   timeout; if nobody answers it, Magisk stores a *deny* policy for that uid and
-   every later request fails instantly with no prompt at all. That looks like a
-   broken setting and is not.
+`tools/install-menu-overlay.sh` needs root, so shell `su` has to work. If it
+does not, the cause is almost always this: **Magisk Superuser tab → `[Share
+dUID] com.android.shell` → toggle ON.** `Settings → Superuser access` already
+reads `Apps and ADB` and is not the problem. The first `su` request pops a
+dialog with a **10 second** timeout; if nobody answers it, Magisk stores a
+*deny* policy for that uid and every later request fails instantly with no
+prompt at all. That looks like a broken setting and is not.
 
 **The Magisk UI cannot be navigated on this handset** — 240×320 with a D-pad
 cannot reach the settings gear. Drive it over adb instead, which is how the
@@ -261,11 +253,6 @@ Android app's UI is simply not operable on this device.
 ## Driving the phone
 
 ```sh
-tools/recon.sh                  # read-only device survey; run it after any flash
-tools/mtk printgpt              # mtkclient, correct interpreter and cwd
-tools/backup.sh critical        # ~2 min, enough to un-brick
-tools/backup.sh full            # ~1-2 h, the shareable flash.bin
-tools/setup-mtkclient.sh        # rebuild vendor/mtkclient from scratch
 tools/build.sh [install|run]    # the APK; sets JAVA_HOME so gradlew works
 tools/release.sh [publish]      # signed release APK, tag, GitHub release
 tools/usb-plex.sh <ip> [stop]   # reach the LAN Plex server over USB, not Wi-Fi
@@ -274,10 +261,10 @@ tools/install-menu-overlay.sh --verify   # after the reboot: is the overlay on?
 tools/install-menu-overlay.sh --remove   # put the Menu back as it was
 ```
 
-ADB was enabled by dialling `*#*#33284#*#*`. **This is a resource that an OTA
-can take away** — flip2 issue #42 reports newer TCL builds disabling that code.
-`com.tcl.fota.system` is therefore `disabled-user`; re-enable with
-`adb shell pm enable com.tcl.fota.system` if you ever want updates back.
+Anything that reads or writes a partition — `recon.sh`, `backup.sh`, `mtk`,
+`patch-boot.sh`, `flash-boot-from-recovery.sh` — is in `../tcl-flip-macos-unlock`
+and only there. Run it from that directory, where its `vendor/` and `backups/`
+also live.
 
 ## Shipping it — the release key is the irreplaceable part
 
@@ -326,183 +313,48 @@ is needed for the player, or the landscape content arrives letterboxed inside a
 temporarily replaced in `shared_prefs/flipflex.xml`, because the splash and every
 home-screen header display them.
 
-## The unlock, and why we are not following the wiki
+## The unlock, in the two paragraphs an app change can trip over
 
-The 4058 vendor framework refuses every APK install unless
-`ro.vendor.tct.endurance` is true, and that property cannot be set without root.
+The whole of it — bootloader, recovery, dumping boot, patching it with Magisk,
+flashing it back, and every silent failure on the way — is
+`../tcl-flip-macos-unlock`. Do not re-derive any of it here. What follows is
+only the part that can bite you while working on the *app*.
 
-**What the refusal actually looks like**, because the error message is a lie:
+**`ro.vendor.tct.endurance` is why installs work at all.** The 4058 vendor
+framework refuses every APK install while it is false, and the refusal lies
+about why:
 
 ```
 adb: Failure [INSTALL_FAILED_INSUFFICIENT_STORAGE: Failed rename]
 ```
 
-with 11 GB free. Storage has nothing to do with it. The real event is in logcat:
+with 11 GB free. Storage has nothing to do with it; the real event is
+`PackageManager: App forbidden installation <pkg>` in logcat. If `tools/build.sh
+install` ever starts failing like that, the boot image has been replaced or the
+property did not get set this boot — reboot once, and if it persists the answer
+is in the unlock repo, not in this one. flip2's wiki records the property as
+racy even on a known-good recipe, so one bad boot is not evidence of anything.
 
-```
-PackageManager: mIsAllowInstall= false,APK_INSTALL_FINISH=true
-PackageManager: App forbidden installation <pkg>
-  PackageManagerService$PrepareFailure: App forbidden installation
-    at PackageManagerService.installPackagesLI(PackageManagerService.java:17165)
-```
-
-So TCL patched `PackageManagerService` itself. `strings` on
-`/system/framework/services.jar` shows `mIsEndurance`, `mIsAllowInstall`,
-`APK_INSTALL_FINISH` and `ro.vendor.tct.endurance` together, and
-**`ro.vendor.tct.endurance` is the only `tct` property in the entire jar** — so
-that really is the single gate, and there is no second flag to discover later.
-
-It also confirms the fix has to happen at boot: `setprop` on a `ro.` property is
-refused at runtime (`Failed to set property`), which is why this needs
-`resetprop` from Magisk rather than anything simpler. Unlocking does not relax
-the check.
-
-### `getprop` CANNOT see this property. Never validate with it.
-
-**This is the single most expensive thing in the project to have learned.** It
-cost roughly eight flash-and-reboot cycles chasing a bug that did not exist.
-
-`ro.vendor.tct.endurance` resolves to the `vendor_default_prop` SELinux context,
-and `adb shell` cannot open that context's property area. Both lookup paths then
-lie to you, in the same direction:
-
-- `getprop | grep endurance` — `__system_property_foreach` **silently skips any
-  context the caller cannot open**, so the property is simply absent from the list.
-- `getprop ro.vendor.tct.endurance` — `__system_property_find` resolves the name
-  to that same unopenable area and returns nothing.
-
-So the property reads empty from adb **whether or not it is set**. It was in fact
-being set correctly for many attempts before that was understood.
-
-Proven side by side on one boot, once root was available:
+**Never validate it with `getprop`.** It resolves to the `vendor_default_prop`
+SELinux context, which `adb shell` cannot open, and *both* lookup paths then
+fail silently in the same direction — the property reads empty whether or not
+it is set. Read it as root or not at all:
 
 ```
 getprop ro.vendor.tct.endurance                    ->  []       (as shell)
 su -c 'getprop ro.vendor.tct.endurance'            ->  [true]   (as root)
-su -c 'getprop | grep endurance'  ->  [ro.vendor.tct.endurance]: [true]
 ```
 
-**Read it as root, or not at all.**
+This cost about eight flash-and-reboot cycles to learn. The only honest test is
+to install an APK — and wait for `sys.boot_completed=1` first, or you get
+`cmd: Can't find service: package`, which is system_server not being up yet and
+nothing to do with the block.
 
-Do not be reassured by other `ro.vendor.*` properties being readable — 52 of them
-are, but they live in `vendor_mtk_default_prop` and `exported_default_prop`,
-which are different contexts. Check with `getprop -Z <name>` before drawing any
-conclusion from a readable neighbour.
-
-**The only honest test is to install an APK.** And wait for
-`sys.boot_completed=1` first, or you get `cmd: Can't find service: package`,
-which is system_server not being up yet and nothing to do with the block.
-
-### The recipe that works
-
-`tools/inject-endurance.sh` injects this into the ramdisk's `overlay.d`. It is
-neutronscott/flip2's `create-boot` recipe verbatim, which is why it is trusted:
-
-```
-on post-fs-data
-    exec u:r:magisk:s0 root root -- ${MAGISKTMP}/magisk resetprop -n ro.vendor.tct.endurance true
-```
-
-`${MAGISKTMP}` is substituted by magiskinit before init parses the file, so the
-`$` never reaches init's expander. flip2's wiki records this property as racy
-even on this recipe — "sometimes you cannot install APKs later, just reboot" —
-so one bad boot is not evidence the approach is wrong.
-
-### init .rc rules on this device, all learned the hard way
-
-Every one of these fails **silently**, which is what made them expensive:
-
-| Rule | What happens if you break it |
-|---|---|
-| **No `$` anywhere** | init drops the whole command at parse time. `echo rc=$?` made every command containing it vanish, looking exactly like it ran and failed |
-| **Always give `<seclabel> <user> <group>`** | bare `exec -- cmd` is dropped outright — no marker file, no property, nothing |
-| **`setprop` from a child process is denied** | markers set by `exec ... sh -c "... setprop ..."` never appear. `resetprop -n` works fine from a child; use it to report |
-| **No nested quotes** | `sh -c "... 'inner' ..."` never runs. Plain `sh -c "..."` with a space *is* fine |
-
-And Magisk's own failures are silent **by construction**: its vendored bionic
-`#define`s `async_safe_format_log` to a no-op, `SysProp::add()` discards the
-return value of `__system_property_add2`, and resetprop's set mode always exits
-0. There is no error to find, so do not go looking for one — instrument instead.
-
-The community answer is to flash `neutron.img` from `neutronscott/flip2`.
-**We are not doing that**, on evidence from their own tracker:
-
-- their image is built from a **KEEZ** boot (issue #28)
-- a user on **KEKA** flashed it and got a bootloop (issue #24)
-- our build is **UPCI** on a 4058G, a combination that appears in *no* issue —
-  their community is 4058W / T408DL on KEEZ/KEFS/KEKA/KEE7, and 4058E on QK6J
-
-Instead: dump **our own** stock boot, patch that, flash it back. Same
-destination, no build mismatch to gamble on. Getting at it turned out to be the
-hard part — see the mtkclient verdict below; the answer is `recovery2.img`.
-
-Then, rather than baking the property into the image the way `neutron.img`
-does, get plain Magisk root first and set the property separately —
-`resetprop -n ro.vendor.tct.endurance true`, persisted via
-`/data/adb/post-fs-data.d/`. Two independently debuggable steps instead of one
-compound failure.
-
-**`magiskboot` has no macOS build** — it ships only as Android ELF, so the patch
-has to run on an ARM Android system somewhere. **Run it on the phone, in
-`recovery2.img` — not in an emulator.** `tools/setup-magisk.sh` extracts the kit,
-`tools/patch-boot.sh` drives it.
-
-The emulator route was the original plan and it would have bootlooped the phone.
-`boot_patch.sh` does `magiskboot cpio ramdisk.cpio "add 0750 init magiskinit"` —
-it injects whichever `magiskinit` sits **in its own directory** and makes it
-`/init`. In the Magisk app's flow that directory is the app's native library
-dir, so the injected binary is the ABI of *whatever machine did the patching*.
-This phone is `ro.product.cpu.abi=armeabi-v7a` with no `abilist64`, so patching
-on an arm64 emulator writes an **arm64 `/init` for a CPU that cannot execute
-64-bit code** — an unrunnable ELF as PID 1, and a bootloop whose cause is
-invisible in the image. Patching inside recovery on the phone makes the ABI
-correct by construction. (Apple Silicon also cannot execute AArch32 at all, so
-an `armeabi-v7a` emulator would be full software emulation.)
-
-`patch-boot.sh` re-extracts the injected `/init` afterwards and asserts it is
-32-bit ARM. Do not remove that check — it is the difference between finding this
-class of mistake in a second and finding it in a bootloop.
-
-**The Magisk flags are measured, not guessed.** `boot_patch.sh` honours
-pre-set env vars, and `patch-boot.sh` passes all five explicitly because
-`get_flags()` derives them from mounts that look different inside recovery. The
-values came off the live stock device before the unlock:
-
-| Flag | Value | Because |
-|---|---|---|
-| `KEEPVERITY` | `true` | `/` is `/dev/block/dm-3`, not `rootfs` → system-as-root |
-| `KEEPFORCEENCRYPT` | `true` | `/data` on `dm-6`, `ro.crypto.state=encrypted` |
-| `PATCHVBMETAFLAG` | `false` | a real `vbmeta` exists (`mmcblk0p36`) |
-| `LEGACYSAR` | `false` | no `skip_initramfs` in `/proc/cmdline` |
-| `PREINITDEVICE` | `persist` | exists (`mmcblk0p4`), survives factory reset |
-
-**mtkclient cannot attach to this phone, and that is settled.** BROM
-(`0e8d:0003`) never appears on the bus no matter which keys are held; only the
-preloader (`0e8d:2000`) does, for two to three seconds per power-up. mtkclient
-sees it and fails the handshake identically over libusb *and* `--serialport`,
-which points at TCL's preloader simply not implementing MediaTek's standard
-handshake — it speaks only its own 8-byte command protocol. That is why flip2
-built `autobooter` rather than using mtkclient, and it is why the read path has
-to be recovery-with-`su` instead, which in turn is why the unlock must come
-*before* the backup rather than after.
-
-**The read path is `recovery2.img`** — neutronscott's recovery with `su` and
-`busybox` baked in, from `http://scottn.us/downloads/recovery2.img` (**plain
-HTTP only; the host serves nothing over TLS**, so verify what you get:
-sha256 `394ad6bb38321565b121dec8c5dff098cd238919b766f9cbc0c994f4f0a376ac`,
-25,165,824 bytes, which is exactly `partition-size:boot`). `tools/dump-from-recovery.sh`
-drives it.
-
-## Backups are not optional
-
-flip2 issues #50 and #55 are both people whose phone still answered in BROM but
-who had no image to restore. **The chip surviving is not the same as the phone
-surviving.** `tools/backup.sh critical` before any write; `full` is worth doing
-because a verified 4058G `flash.bin` does not exist publicly and #55 is someone
-who needed exactly that.
-
-`backups/` is gitignored — some of those partitions carry IMEI and calibration
-data and must not leave the machine by accident.
+**ADB itself was enabled by dialling `*#*#33284#*#*`, and an OTA can take that
+away** — flip2 issue #42 reports newer TCL builds disabling the code.
+`com.tcl.fota.system` is therefore `disabled-user`; re-enable with
+`adb shell pm enable com.tcl.fota.system` if you ever want updates back. Losing
+ADB on this phone means losing the ability to install a build at all.
 
 ## Conventions
 
